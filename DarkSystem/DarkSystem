@@ -49,7 +49,10 @@ ClearEnvVariables(){
 	for e in `export -p`; do
 		IFS=' =';
 		set -- ${e}
-		export -n ${2}; unset ${2};
+		case "${2}" in
+			DESL_DEVID | DESL_HWID ) ;;
+			*) export -n ${2}; unset ${2};;
+		esac
 	done
 
 	export PATH="${NEWPATH}";
