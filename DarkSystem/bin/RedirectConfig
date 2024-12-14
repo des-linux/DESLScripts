@@ -1,0 +1,211 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//DESLinux Configuration Redirector
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+OFS=${IFS};
+MARKER_FILE='.deslcfgr';
+IN_ROOT_DCONF='/DConf';
+CONF_MOUNT_DIR='/mnt/DConf';
+REDIRECT_MODE=0;
+
+Main(){
+	case ${1} in
+		/Save		) CfgSave "${@}";;
+		/Save:*		) CfgSave "${@}";;
+		/Restore	) CfgRestore "${@}";;
+		/Restore:*	) CfgRestore "${@}";;
+		/Install	) Install "${@}";;
+		/Disable	) Initialize;;
+		/Redirect	) Redirect "${@}";;
+		*		)
+					echo "${0##*/} </Redirect|/Install|/Disable>"
+					echo "${0##*/} /Save[:BackupFilePath]"
+				;;
+	esac
+	return ${?};
+}
+
+EcfoIfExist(){
+	case ${1} in
+		*\**);;
+		*) echo ${*};;
+	esac
+	return 0;
+}
+
+DetectCfgDir(){
+	EcfoIfExist /DRoot/*/conf
+	EcfoIfExist /DRoot/*/etc
+	EcfoIfExist /DRoot/*/log
+	echo '/etc'
+	echo '/usr/etc'
+	return 0;
+}
+
+detect_cfgdir(){
+	local IFS=$'\n\r ';
+	echo `DetectCfgDir`
+	return 0;
+}
+
+CfgSave(){
+	local FILE=${2:-${1#*:}};
+	[ "${FILE//\/Save/}" = '' ] && {
+		local DATE=`date -Iseconds`
+		DATE=${DATE%+*};
+		FILE="DESLConfig_${DATE//:/}.tar"
+	}
+
+	echo "I: Backup configuration to '${FILE}'..."
+	tar cf "${FILE}" `detect_cfgdir`
+	return 0;
+}
+
+CfgRestore(){
+	echo "E: Restore is not supported. Just extract backup archvie to root '/'"
+	return 1;
+}
+
+Initialize(){
+	local IFS=$'\n\r';
+	for x in `mount`; do
+		IFS=$' ';
+		set -- ${x}
+		case ${3} in
+			"${CONF_MOUNT_DIR}" ) umount ${3};;
+			/DRoot/*/conf | /DRoot/*/etc ) umount ${3};;
+			/usr ) umount ${3};;
+		esac
+	done
+	return 0;
+}
+
+DetectRWDev(){
+	REDIRECT_MODE=0;
+	local MOUNT_DIR=${1};
+	local MOUNT_RW=${2:-rw};
+
+	mkdir -p "${MOUNT_DIR}"
+
+	[ -e "${IN_ROOT_DCONF}" ] && {
+		REDIRECT_MODE=1;
+		mount -o bind "${IN_ROOT_DCONF}" "${MOUNT_DIR}"
+		return 0;
+	}
+
+	local DEV;
+	echo 'Detecting configuration store device'
+	for mm in /sys/dev/block/*; do
+		DEV=`GetDevName "${mm}" || devmm2name block "${mm}"`;
+
+		echo "	Checking '${DEV}'..."
+		[ "${DEV}" == '' ] && continue
+
+		MountEx "/dev/${DEV}" "${MOUNT_DIR}" ${MOUNT_RW} 2>/dev/null
+
+		[ -e "${MOUNT_DIR}/${MARKER_FILE}" ] && return 0;
+
+		umount "${MOUNT_DIR}" 2>/dev/null
+	done
+	return 1;
+
+}
+
+Redirect(){
+	Initialize;
+	DetectRWDev "${CONF_MOUNT_DIR}" || return 1;
+	RedirectAuto || return 1;
+
+	return 0;
+}
+
+RedirectAuto(){
+	local x;
+	local IFS=$' ';
+	echo 'Redirecting...'
+
+	for x in `detect_cfgdir`; do
+		RedirectExec "${x}"
+	done
+
+
+	[ ! "${REDIRECT_MODE}" = '1' ] && {
+		RedirectExec '/usr/local'
+	}
+
+	return 0;
+}
+
+RedirectExec(){
+	local FROM=${1};
+	local TO=${CONF_MOUNT_DIR}/${1##/DRoot};
+
+	echo "	${FROM} -> ${TO}"
+
+	[ ! -e "${FROM}/" ] && return 1;
+
+	[ ! -e "${TO}/" ] && {
+		mkdir -p "${TO}"
+		cp -R "${FROM}" "${TO%/*}"
+	}
+
+	umount "${FROM}" 2>/dev/null
+	mount -o bind "${TO}" "${FROM}" || return 1;
+	return 0;
+}
+
+Install(){
+	case ${2} in
+		'/'	) InstallRoot;;
+		*	) InstallDev "${@}";;
+		''	) echo 'Unsupported device specified.';;
+	esac
+	return ${?};
+}
+
+InstallRoot(){
+	mkdir -p "${IN_ROOT_DCONF}"
+	[ ! -e "${IN_ROOT_DCONF}/" ] && {
+		echo "Failed to create ${IN_ROOT_DCONF}"
+		return 1;
+	}
+	echo "Install succeed on ${IN_ROOT_DCONF}"
+	return 0;
+}
+
+InstallDev(){
+	MountEx "${2}" "${CONF_MOUNT_DIR}" || return 1;
+	touch "${CONF_MOUNT_DIR}/${MARKER_FILE}" || return 1;
+	umount "${CONF_MOUNT_DIR}"
+	echo "Install succeed on ${2}"
+	return 0;
+}
+
+MountEx(){ # dev, dir, rw
+	local MOUNT_DEV=${1};
+	local MOUNT_DIR=${2};
+	local MOUNT_RW=${3:-rw}
+
+	ntfs-3g -o ${MOUNT_RW},acl "${MOUNT_DEV}" "${MOUNT_DIR}" && return 0;
+
+	mount -o "${MOUNT_RW}" "${MOUNT_DEV}" "${MOUNT_DIR}" && return 0;
+
+	return 1;
+}
+
+GetDevName(){
+	for ue in `cat "${1}/uevent"`; do
+		case ${ue} in
+			DEVNAME=*)
+				echo "${ue#*=}"
+				return 0;
+			;;
+		esac
+	done
+	echo ''
+	return 1;
+}
+
+Main "${@}";

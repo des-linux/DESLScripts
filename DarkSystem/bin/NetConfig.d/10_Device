@@ -1,0 +1,63 @@
+#!INCLUDE_ONLY
+#//////////////////////////////////////////////////
+#//DESLinux NetConfig.d :: Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+Device_Main(){
+	DeviceInit
+	return 0;
+}
+
+DeviceInit(){
+	local MAC5 IF;
+	info "Initialize network interfaces..."
+
+ 	local IFS=$'\n\r';
+	for x in `ip link`; do
+		[ "${x:0:1}" = ' ' ] && continue
+		x=${x#*: };
+		IF=${x%:*};
+
+ 		case "${IF}" in
+ 			*@* ) ;;
+
+ 			eth* )
+				MAC5=`${sRoot}/dec2hex ${IF:3}`;
+				case "${MAC5}" in
+					[0-7][0-f] )
+						DeviceSetHWAddr "${IF}" "${MAC4}:${MAC5}:00";
+					;;
+
+					* )
+		 				warning " Max supported interfaces are 127. '${IF}' is ignored."
+					;;
+				esac
+			;;
+
+			usb* )
+				MAC5=`${sRoot}/dec2hex ${IF:3}`;
+		 		[ ! "${MAC5:0:1}" = '0' ] && {
+		 			warning " Max supported USB interfaces are 16. '${IF}' is ignored."
+				} || {
+						DeviceSetHWAddr "${IF}" "${MAC4}:B${MAC5:1}:00"
+				}
+			;;
+
+		esac
+	done
+	return 0;
+}
+
+DeviceSetHWAddr(){ # IF, MAC
+	local IF=${1};
+	local MAC=${2};
+	[ "${MAC4}" = '00:00:00:00' ] && return 0;
+
+	echo "I:  interface: ${IF} -> ${MAC}"
+	ip link set dev "${IF}" down
+	ip addr flush dev "${IF}"
+	ip link set dev "${IF}" address "${MAC}";
+	return 0;
+}

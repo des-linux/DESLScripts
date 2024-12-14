@@ -1,0 +1,161 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//ServerLoader v1.x compatible DESLDaemon helper
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+DSL_SELF="${0}";
+DSL_FOLDER='/tmp/DESLDaemon/';
+BIN_FOLDER=${BIN_FOLDER:-/DRoot/DarkSystem/bin};
+CONF_FOLDER=${CONF_FOLDER:-/DRoot/DarkSystem/conf};
+SERVICE_FOLDER="${CONF_FOLDER}/Services";
+
+DESLDAEMON="${BIN_FOLDER}/DESLDaemon";
+
+. ${BIN_FOLDER}/ConfigManager.sh
+
+DSL_Header(){
+cat <<"EOF";
+:
+: ServerLoader :: ServerLoader v1.x compatible DESLDaemon helper.
+: http://e.xprj.net/
+: (C)2014-2025 Dark Embedded Systems.
+:
+EOF
+return 0;
+}
+
+ShowUsage(){
+DSL_Header;
+
+cat << EOF;
+
+Run installed service:
+	ServerLoader <start | once> <Service Name>
+
+Run non-installed service:
+	ServerLoader <start | once> <Service Name> <Dir> <App> [Args ...]
+
+	e.g.) ServerLoader start telnetd /sbin telnetd -l /bin/sh
+
+Control Service:
+	ServerLoader <stop | restart | nowait> <Service Name>
+
+Automatic start settings:
+	ServerLoader <enable | disable> <Service Name>
+
+List running services:
+	ServerLoader list
+
+EOF
+return 0;
+}
+
+SvcStart(){
+	local SMode SName SDir SApp SArgs;
+	SMode="${1}";
+
+	[ ! "${3}" = '' ] && {
+		shift; SName="${1}";
+		shift; SDir="${1}";
+		shift; SApp="${1}";
+		shift; SArgs="${@}";
+	} || {
+		shift; SName="${1}";
+
+		local SERVICE_FILE="${SERVICE_FOLDER}/${SName}.ini";
+		[ ! -e "${SERVICE_FILE}" ] && {
+			echo "E: Service: '${SName}' is not found."
+			return 1;
+		}
+
+		ConfigLoad "${SERVICE_FILE}";
+
+		ConfigGet SDir Service:Dir -
+		ConfigGet SApp Service:App -
+		ConfigGet SArgs Service:Args ''
+	}
+
+	MODE='/Start';
+	[ "${DSL_START_ONCE}" = "1" ] && MODE='/Once';
+
+	exec ${DESLDAEMON} ${MODE} "${SName}" "${SDir}" "${SApp}" ${SArgs}
+}
+
+SvcOnce(){
+	DSL_START_ONCE=1 SvcStart "${@}"
+}
+
+SvcStop(){
+	shift; local SName="${1}";
+	exec ${DESLDAEMON} /Stop "${SName}"
+}
+
+SvcRestart(){
+	shift; local SName="${1}";
+	exec ${DESLDAEMON} /Restart "${SName}"
+}
+
+SvcNoWait(){
+	shift; local SName="${1}";
+	exec ${DESLDAEMON} /Nowait "${SName}"
+}
+
+SvcEnable(){
+	shift; SName="${1}";
+	local SERVICE_FILE="${SERVICE_FOLDER}/${SName}.ini";
+	[ ! -e "${SERVICE_FILE}" ] && {
+		echo "E: Service: '${SName}' is not found."
+		return 1;
+	}
+
+	mkdir -p "${SERVICE_FOLDER}/auto/";
+	touch "${SERVICE_FOLDER}/auto/${SName}" || return 1;
+
+	return 0;
+}
+
+SvcDisable(){
+	shift; SName="${1}";
+	local SERVICE_FILE="${SERVICE_FOLDER}/${SName}.ini";
+
+	rm -f "${SERVICE_FOLDER}/auto/${SName}" || return 1;
+
+	return 0;
+}
+
+SvcAuto(){
+	for f in `ls "${SERVICE_FOLDER}/auto/"`; do
+		echo "I: Starting '${f}'..."
+		sleep 1
+		${DSL_SELF} start ${f};
+	done
+	return 0;
+}
+
+SvcList(){
+	exec ${DESLDAEMON} /List
+}
+
+Main(){
+	mkdir -p "${DSL_FOLDER}"
+
+	case ${1} in
+		"start"		) SvcStart "${@}";;
+		"stop"		) SvcStop "${@}";;
+		"restart"	) SvcRestart "${@}";;
+		"once"		) SvcOnce "${@}";;
+		"nowait"	) SvcNoWait "${@}";;
+
+		"enable"	) SvcEnable "${@}";;
+		"disable"	) SvcDisable "${@}";;
+
+		"auto"		) SvcAuto "${@}";;
+		"list"		) SvcList "${@}";;
+		*		) ShowUsage;;
+	esac
+
+	return ${?};
+}
+
+Main "${@}";

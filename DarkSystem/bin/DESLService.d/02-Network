@@ -1,0 +1,18 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//DESLinux DESLService.d :: System Initializer
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+SELF=`readlink -f ${0}`
+sRoot=${SELF%/*};
+
+Main(){
+	"${sRoot}/../NetConfig" || {
+		echo 'WARNING' >&9
+	}
+
+	return 0;
+}
+
+Main "${@}";

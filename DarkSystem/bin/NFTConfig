@@ -1,0 +1,113 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//NETConfig :: Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+SELF=`readlink -f ${0}`
+sRoot=${SELF%/*};
+
+. ${sRoot}/ConfigManager.sh
+. ${sRoot}/ArgsParser.sh
+
+CheckNFTables(){
+	nft 2>/dev/null
+	if [ "${?}" = "127" ]; then
+		warning "'nft' command is not found."
+		return 1;
+	fi
+	return 0;
+}
+
+Main() { # (IPTables.conf)
+	ParseArgs ${*};
+
+	CheckNFTables || return 250;
+
+	echo "I: d-Network Router Network Configurator"
+	echo "I: 	(C)2016-2025 Dark Network Systems"
+	echo "I: 	http://e.xprj.net/"
+
+	CONF_DIR="${ARGS_OPT_LONG_Config:-${sRoot}/../conf/nftables.d}";
+
+	if [ ! -e "${CONF_DIR}" ]; then
+		error "E: Configuration directory '${CONF_DIR}' not found."
+		return 1;
+	fi
+
+	local x;
+	local R=0;
+	nft flush ruleset || R=${?};
+	for x in ${CONF_DIR}/*.conf; do
+		info "Loading ${x##*/}..."
+		nft -f "${x}" || {
+			R=${?};
+			error ' Failed to apply configuration'
+		}
+	done
+
+	PortForwards "${ARGS_OPT_LONG_PortConfig:-${sRoot}/../conf/PortForwards.conf}" || R=${R};
+
+	return ${R};
+}
+
+PortForwards(){
+	local R=0;
+	local K V;
+	local PRID SRCP DSTI DSTP PRNM;
+	ConfigLoad "${1}" || return 1;
+
+	for t in `ConfigSearchGroup`; do
+		[ "${t}" = 'Global' ] && t='';
+
+		for x in `ConfigListWithValue "${t:-Global}"`; do
+			case ${x} in
+				*=*)
+					K=${x%%=*};
+					V=${x#*=};
+
+					PRID=${K};
+					SRCP='';
+					DSTI=${V};
+					DSTP='';
+
+					case ${K} in
+						*/*)	PRID=${K%%/*}; SRCP=${K#*/};
+							DSTP=${SRCP};
+						;;
+					esac
+
+					case ${V} in
+						*:*) DSTI=${V%%:*}; DSTP=${V#*:};;
+					esac
+
+					case ${PRID} in
+						TCP|tcp)	PRID=; PRNM='tcp';;
+						UDP|udp)	PRID=; PRNM='udp';;
+
+						ICMP|icmp)	PRID='1';;
+						ICMP6|icmp6)	PRID='581';;
+					esac
+					nft "add rule ip nat PREROUTING ${t:+iifname ${t}} ${PRNM:+${PRNM}} ${PRID:+ip protocol ${PRID}} ${SRCP:+dport ${SRCP}} dnat to ${DSTI}${DSTP:+:${DSTP}}" || R=${?};
+				;;
+			esac
+		done
+	done
+
+	return ${R};
+}
+
+error(){
+	echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2
+}
+warning(){
+	echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2
+}
+infoex(){
+	echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"
+}
+info(){
+	echo -e "I: ${*}"
+}
+
+Main "${@}";

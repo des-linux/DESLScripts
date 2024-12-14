@@ -1,0 +1,102 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//DESLinux System Environment Initializer
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+#// Note:
+#// DSLoader, DESLService scripts can NOT set system environment variables.
+sRoot='/DRoot/DarkSystem';
+
+Main(){
+	clear
+
+cat <<"EOF"
+:
+: Dark Boot System for Linux Ver 1.05
+: http://e.xprj.net/
+: (C)2014-2025 Dark Network Systems.
+:
+
+EOF
+	cd "${sRoot}"
+
+	ClearEnvVariables;
+	AddPATH '/usr/local' '/usr' '' '/mnt/coretools0'
+	ExportSystemVariables;
+	echo "${PRDCODE} [$PRDNAME]"
+
+	echo "Initialize system environment variables..."
+	sleep 1
+	echo "${PRDHOST}" > '/proc/sys/kernel/hostname'
+
+	echo 'Exec...'
+	sleep 1
+	cd "${DROOT}"
+	if [ -f './boot.sh' ]; then
+		exec ./boot.sh
+	else
+		"${sRoot}/Err"
+	fi
+
+return 0
+}
+
+ClearEnvVariables(){
+	local NEWPATH="${1}";
+	local IFS=$'\n\r';
+
+	for e in `export -p`; do
+		IFS=' =';
+		set -- ${e}
+		export -n ${2}; unset ${2};
+	done
+
+	export PATH="${NEWPATH}";
+	return 0;
+}
+
+AddPATH(){
+	local x
+	for x in "${@}"; do
+		PATH="${PATH:+${PATH}:}${x}/sbin:${x}/bin";
+	done
+}
+
+
+ExportSystemVariables(){
+	export DROOT='/DRoot';
+	export LED_DIR='/tmp/DLEDLoader';
+
+	export PRDNAME=`LoadTextFile "${sRoot}/PRDNAME.txt"`;
+	export PRDCODE=`LoadTextFile "${sRoot}/PRDCODE.txt"`;
+	export PRDHOST="${PRDCODE%%:*}";
+
+	export TERM='linux';
+	return 0;
+}
+
+LoadTextFile(){
+	local x;
+	local IFS=$'\n\r';
+	for x in `cat "${1}"`; do
+		echo "${x}"; break;
+	done
+	return 0;
+}
+
+Entry(){
+	case "${1}" in
+		/GetEnv )
+			ExportSystemVal;
+			return 0;;
+		/GetEnvEx )
+			ExportSystemVal;
+			. "${sRoot}/Config.sh" >/dev/null 2>&1
+			return 0;;
+	esac
+	Main "${@}";
+	return 0;
+}
+
+Entry "${@}";

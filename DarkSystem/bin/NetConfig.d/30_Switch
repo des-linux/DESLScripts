@@ -1,0 +1,66 @@
+#!INCLUDE_ONLY
+#//////////////////////////////////////////////////
+#//DESLinux NetConfig.d :: Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+Switch_Main(){
+	info 'Switch...'
+
+	swconfig > /dev/null 2>&1
+	[ "${?}" = '127' ] && {
+		warning 'W:  'swconfig' is not supported in this device.'
+		return 1;
+	}
+
+	LoadConfigFile "Switch.conf" || return 1;
+
+	local IFS=$'\n\r';
+	for s in `ConfigSearchGroup Switch`; do
+		SwitchConfig "${s:6}"
+	done
+	return 0;
+}
+
+SwitchConfig(){
+	local SWID=${1:-0};
+	local K V MAC5 MAC6 MAC;
+
+	info " Switch${SWID}..."
+
+	info '  Initialize...'
+	swconfig dev switch${SWID} set reset
+
+	info '  Divide ports...'
+	swconfig dev switch${SWID} set enable_vlan 1
+	ip link set dev "eth${SWID}" up
+
+	local IFS=$'\n\r';
+	for x in `ConfigListWithValue Switch`; do
+		case ${x} in
+			*=* )
+				K=${x%=*};
+				V=${x#*=};
+				MAC5=`${sRoot}/dec2hex ${SWID}`;
+				MAC6=`${sRoot}/dec2hex ${K}`;
+				MAC="${MAC4}:${MAC5:-ff}:${MAC6:-ff}";
+
+				IFS=$' ,	';
+				set -- ${V}
+				info "   Add switch virtual interface: eth${SWID}.${K} -> [${*}]"
+				swconfig dev "switch${SWID}" vlan "${K}" set vid "${K}"
+				swconfig dev "switch${SWID}" vlan "${K}" set ports "${*}"
+
+				info "    interface: eth${SWID}.${K} -> ${MAC}"
+				ip link add name "eth${SWID}.${K}" link "eth${SWID}" type vlan id "${K}"
+				ip link set dev "eth${SWID}.${K}" down
+				ip link set dev "eth${SWID}.${K}" address "${MAC}"
+				ip link set dev "eth${SWID}.${K}" up
+			;;
+		esac
+	done
+
+	swconfig dev "switch${SWID}" set apply
+	return 0;
+}

@@ -1,0 +1,120 @@
+#!INCLUDE_ONLY
+#//////////////////////////////////////////////////
+#//DESLinux NetConfig.d :: Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+Tunnel_Main(){
+	TunnelInit
+	TunnelMake
+
+	TunnelRoute4
+	TunnelRoute6
+	return 0;
+}
+
+TunnelInit(){
+	local TName;
+	info ' Initialize...'
+
+	local IFS=$'\n\r';
+	for x in `ip -4 tunnel show`; do
+		TName=${x%%:*};
+		ip link set dev "${TName}" down
+
+		ip tunnel del "${TName}"
+	done
+
+	for x in `ip -6 tunnel show`; do
+		TName=${x%%:*};
+		ip link set dev "${TName}" down
+
+		ip tunnel del "${TName}"
+	done
+	return 0;
+}
+
+TunnelMake(){
+	local K V;
+	local TVER TName TMode TRemote TLocal TIP4 TIP6 TTTL TEL;
+
+	info "Making tunnels..."
+	LoadConfigFile "Tunnel.conf" || return 1;
+
+	local IFS=$'\n\r';
+	for x in `ConfigListGroup`; do
+		TName=${x};
+		info " Tunnel: ${TName}"
+		ConfigGet TMode "${TName}:Mode" ''
+		ConfigGet TRemote "${TName}:RemoteIP" ''
+		ConfigGet TLocal "${TName}:LocalIP" ''
+		ConfigGet TTTL "${TName}:TTL" ''
+		ConfigGet TIP4 "${TName}:IPv4" ''
+		ConfigGet TIP6 "${TName}:IPv6" ''
+
+		[ "${TMode}" = '' ] && {
+			error "  Mode is required."
+			continue;
+		}
+
+		[ "${TRemote}" = '' ] && {
+			error "  RemoteIP is required."
+			continue;
+		}
+
+		case "${TMode}" in
+			ip6ip6 | ipip6 | ip6gre | vti6)
+				TVER=-6;
+				TEL='none';
+
+				[ "${TLocal}" = '' ] && {
+					error "  LocalIP is required."
+					continue;
+				}
+			;;
+			*) TVER=-4; TEL='';;
+		esac
+
+		IFS=' ';
+		ip ${TVER} tunnel add "${TName}" mode "${TMode}" remote "${TRemote}" ${TLocal:+local ${TLocal}} ${TTTL:+ttl ${TTTL}} ${TEL:+encaplimit ${TEL}}
+
+		IFS=$' ,	';
+		for v in ${TIP4}; do
+			ip addr add "${v}" dev "${TName}"
+		done
+
+		IFS=$' ,	';
+		for v in ${TIP6}; do
+			ip -6 addr add "${v}" dev "${TName}"
+		done
+
+		ip link set dev "${TName}" up
+
+	done
+}
+
+TunnelRoute4(){
+	LoadConfigFile 'TRoute4.conf' || return 1;
+
+	Route4Rule
+	Route4Route Route4
+
+	for r in `ConfigSearchGroup Table4_`; do
+		route_route4 "${r}"
+	done
+
+	return 0;
+}
+
+TunnelRoute6(){
+	LoadConfigFile 'TRoute6.conf' || return 1;
+
+	Route6Rule
+	Route6Route Route6
+
+	for r in `ConfigSearchGroup Table6_`; do
+		Route6Route "${r}"
+	done
+	return 0;
+}

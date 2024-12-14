@@ -1,0 +1,82 @@
+#!INCLUDE_ONLY
+#//////////////////////////////////////////////////
+#//DESLinux NetConfig.d :: Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+Bridge_Main(){
+	info 'Bridge...'
+	LoadConfigFile "Bridge.conf" || return 1;
+
+	BridgeInit2
+	BridgeInit
+	BridgeConfig
+	return 0;
+}
+
+BridgeInit2(){
+	info ' Initialize (new method)...'
+
+	local IFS=$'\n\r';
+	local B;
+	for x in `ip link show type bridge`; do
+		IFS=$' 	';
+		set -- ${x}
+		[ "${1}" = 'link/ether' ] && continue;
+
+		B="${2%:}";
+		info "  ${B}"
+		CallServerLoader stop "DHCPC-${B}"
+ 		ip link set dev "${B}" down
+		ip link delete dev "${B}" type bridge
+	done
+
+	return 0;
+}
+
+BridgeInit(){
+	info ' Initialize...'
+
+	local IFS=$'\n\r';
+	for x in `brctl show`; do
+		IFS=$' 	';
+		set -- ${x}
+		[ "${2}" = 'name' ] && continue;
+
+		info "  ${1}"
+		CallServerLoader stop "DHCPC-${1}"
+ 		ip link set dev "${1}" down
+		ip link delete dev "${1}" type bridge
+	done
+	return 0;
+}
+
+BridgeConfig(){
+	local K V;
+
+	info ' Add...'
+
+	local IFS=$'\n\r';
+	for x in `ConfigListWithValue Bridge`;do
+		case ${x} in
+			*=* )
+				K=${x%=*};
+				V=${x#*=};
+				info "  ${K} -> ${V}"
+
+				ip link add name "${K}" type bridge
+ 				ip link set dev "${K}" up
+
+				[ ! "${V}" = '*' ] && {
+					IFS=$' ,	';
+					for v in ${V}; do
+						ip link set dev "${v}" master "${K}"
+ 						ip link set dev "${v}" up
+					done
+				}
+			;;
+		esac
+	done
+	return 0;
+}

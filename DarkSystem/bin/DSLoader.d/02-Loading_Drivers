@@ -1,0 +1,77 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//DESLinux DSLoader.d :: System Loader
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+PREVCNT=65535;
+
+Main(){
+	CheckDependencies;
+	LoadDrivers;
+	RegisterDev scan
+	return 0;
+}
+
+CheckExec(){
+	"${1}" --help
+	[ "${?}" = '127' ] && {
+		echo "${1} is not found." >&3
+		exit 20;
+	}
+	return 0;
+}
+
+CheckDependencies(){
+	CheckExec 'devmm2name'
+	return 0;
+}
+
+RegisterDev(){
+	[ -e '/dev/null' ] && return 0;
+	[ -e '/dev/zero' ] && return 0;
+
+	/DRoot/DarkSystem/bin/devManager ${1} && return 0;
+	devManager ${1} && return 0;
+
+	# No devtmpfs support or failed
+	CheckDependencies;
+	devmm2name ${1} && return 0;
+
+	return 127;
+}
+
+CheckRedetectRequired(){
+	local CNT=0;
+	local IFS=$'\r\n';
+
+	for m in `lsmod`; do
+		CNT=$((CNT+1));
+	done
+
+	[ "${CNT}" = "${PREVCNT}" ] && {
+		PREVCNT=${CNT};
+		return 0;
+	}
+
+	PREVCNT=${CNT};
+	return 1;
+}
+
+DetectAndLoadDevices(){
+	for m in /sys/bus/*/devices/*/modalias; do
+		modprobe `cat ${m}`
+	done
+}
+
+LoadDrivers(){
+	echo 'I: Loading drivers...'
+	depmod -a
+
+	while ! CheckRedetectRequired; do
+		DetectAndLoadDevices
+	done
+	return 0;
+}
+
+Main "${@}";

@@ -1,0 +1,66 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//DESLinux Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+Main(){
+	SELF=`readlink -f ${0}`;
+	sRoot="${SELF%/*}";
+
+	DROOT="${DROOT:-/DRoot}";
+	SERVERLOADER="${ServerLoader:-${DROOT}/ServerLoader}";
+	CONF_DIR="${DROOT}/DarkSystem/conf";
+
+	. ${sRoot}/ConfigManager.sh
+
+	echo "I: d-Network Router Network Configurator"
+	echo "I: 	(C)2016-2025 Dark Network Systems"
+	echo "I: 	http://e.xprj.org/"
+
+	ConfigLoad "${CONF_DIR}/System.conf"
+
+	# Device settings
+	ConfigGet SC_BaseMAC System:BaseMAC 02:00:00:00
+	ConfigGet SC_HostName System:HostName -
+
+	if [ "${SC_HostName}" = "-" ]; then
+		SC_HostName=${PRDHOST:-XXXXX};
+	fi
+
+	export SC_HostName
+	export SC_BaseMAC
+
+	echo "${SC_HostName}" >/proc/sys/kernel/hostname
+	echo "I: Hostname	: ${SC_HostName}"
+	echo "I: Hardware ID	: ${SC_BaseMAC}"
+
+	local DIR="${sRoot}/NetConfig.d"
+
+	local IFS=$'\n\r';
+	local f m;
+	for f in ${DIR}/*; do
+		m="${f##*/}";
+		m="${m##*_}"
+		. "${f}"
+		${m}_Main "${@}"
+	done
+
+	return 0;
+}
+
+error(){
+	echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2
+}
+warning(){
+	echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2
+}
+infoex(){
+	echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"
+}
+info(){
+	echo -e "I: ${*}"
+}
+
+Main "${@}"

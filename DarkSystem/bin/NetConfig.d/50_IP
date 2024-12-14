@@ -1,0 +1,140 @@
+#!INCLUDE_ONLY
+#//////////////////////////////////////////////////
+#//DESLinux NetConfig.d :: Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+IP_Main(){
+	local DHC_CONF="${DROOT:-/DRoot}/DHCP/etc/dhclient.conf";
+
+	[ ! -f "${DHC_CONF}" ] && {
+		DHC_CONF='/tmp/dhclient.conf'
+		IPMakeDHConf "${DHC_CONF}"
+	}
+
+	local DHC_ARGS="-cf ${DHC_CONF}";
+
+	IP4Config
+	IP6Config
+	return 0;
+}
+
+IPMakeDHConf(){
+	cat <<"EOF" >> "${1}"
+timeout 10;
+retry 10;
+
+initial-interval 2;
+backoff-cutoff 5;
+EOF
+
+	return 0;
+}
+
+IP4Config(){
+	local K V;
+
+	info 'Set IPv4...'
+
+	ip -4 addr flush dev lo
+	ip addr add 127.0.0.1/8 dev lo
+	ip link set dev lo up
+
+	LoadConfigFile 'IPv4.conf' || return 1;
+
+	local IFS=$'\n\r';
+	for x in `ConfigListWithValue IPv4`; do
+		case ${x} in
+			*='*' | *=- )	# Only link up
+				K=${x%=*};
+				info " ${K} -> (only link up)"
+		 		ip link set "${K}" up
+			;;
+
+			*=DHCP ) #DHCP
+				K=${x%=*};
+				info " ${K} -> DHCP"
+
+				ip -4 addr flush dev "${K}"
+		 		ip link set "${K}" up
+
+				CallServerLoader stop  "DHCPC-${K}"
+				CallServerLoader start "DHCPC-${K}" ${DROOT}/DHCP/bin dhclient -4 -d ${DHC_ARGS} -sf "${DROOT}/DHCP/bin/dhclient-script" -lf "/var/dhclient.db" "${K}"
+			;;
+
+			*=* ) # Static IP
+				K=${x%=*};
+				V=${x#*=};
+				info " ${K} -> ${V}"
+
+				ip -4 addr flush dev "${K}"
+
+				IFS=$' ,	';
+				for v in ${V}; do
+					ip addr add "${v}" dev "${K}"
+				done
+		 		ip link set "${K}" up
+			;;
+		esac
+	done
+}
+
+
+IP6Config(){
+	local K V;
+
+	info 'Set IPv6...'
+
+	ip -6 addr flush dev lo
+	ip -6 addr add ::1/128 dev lo
+	ip link set lo up
+
+	LoadConfigFile 'IPv6.conf' || return 1;
+
+	local IFS=$'\n\r';
+	for x in `ConfigListWithValue IPv6`; do
+		case ${x} in
+			*='*' | *=- )	# Only link up
+				K=${x%=*};
+				info " ${K} -> (only link up)"
+		 		ip link set "${K}" up
+			;;
+
+			*=DHCP ) #DHCP
+				K=${x%=*};
+				info " ${K} -> DHCP"
+
+				ip -6 addr flush dev "${K}"
+				IP6ResetLinkLocalAddr "${K}"
+
+		 		ip link set "${K}" up
+
+				CallServerLoader stop  "DHCPC6-${K}"
+				CallServerLoader start "DHCPC6-${K}" ${DROOT}/DHCP/bin dhclient -6 -d ${DHC_ARGS} -sf "${DROOT}/DHCP/bin/dhclient-script" -lf "/var/dhclient.db" "${K}"
+			;;
+
+			*=* ) # Static IP
+				K=${x%=*};
+				V=${x#*=};
+				info " ${K} -> ${V}"
+
+				ip -6 addr flush dev "${K}"
+				IP6ResetLinkLocalAddr "${K}"
+
+				IFS=$' ,	';
+				for v in ${V}; do
+					ip -6 addr add "${v}" dev "${K}"
+				done
+		 		ip link set "${K}" up
+			;;
+		esac
+	done
+	return 0;
+}
+
+IP6ResetLinkLocalAddr(){
+	echo '1' > /proc/sys/net/ipv6/conf/${1}/addr_gen_mode || return ${?};
+	echo '0' > /proc/sys/net/ipv6/conf/${1}/addr_gen_mode || return ${?};
+	return 0;
+}

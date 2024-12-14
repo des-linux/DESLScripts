@@ -1,0 +1,35 @@
+#!/bin/sh#//////////////////////////////////////////////////
+#//////////////////////////////////////////////////
+#//DESLinux NAND Unlock shortcut
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+Main(){
+	UnlockNAND || return ${?};
+	BlinkLED;
+	return 0;
+}
+UnlockNAND(){
+	echo 'I: Now unlocked NAND for change configuration!'
+	mount -o remount,rw / || return ${?};
+	return 0;
+}
+
+BlinkLED(){
+	local TMS=100
+
+	local LED='/sys/class/leds';
+	local IFS=$'\n\r';
+	for a in `ls ${LED}`; do
+		echo none > ${LED}/${a}/trigger
+	done
+	for a in `ls ${LED}`; do
+		echo timer > ${LED}/${a}/trigger
+		echo ${TMS} > ${LED}/${a}/delay_on
+		echo ${TMS} > ${LED}/${a}/delay_off
+	done
+	return 0;
+}
+
+Main "${@}"

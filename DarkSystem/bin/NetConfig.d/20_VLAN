@@ -1,0 +1,71 @@
+#!INCLUDE_ONLY
+#//////////////////////////////////////////////////
+#//DESLinux NetConfig.d :: Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+VLAN_Main(){
+	info 'VLAN...'
+
+	VLANInit
+
+	LoadConfigFile "VLAN.conf" || return 1;
+	VLANConfig
+	return 0;
+}
+
+VLANInit(){
+	local IF IFx;
+
+	info ' Delete existing...'
+
+	local IFS=$'\n\r';
+ 	for x in `ip link`; do
+		[ "${x:0:1}" = ' ' ] && continue
+		x=${x#*: };
+		IF=${x%:*};
+
+ 		case "${IF}" in
+ 			*@NONE ) ;;
+			*@* )
+				IFx=${IF%@*};
+				info "  ${IFx}"
+		 		ip link set dev "${IFx}" down
+				ip link delete dev "${IFx}" type vlan
+			;;
+		esac
+	done
+	return 0;
+}
+
+VLANConfig(){
+	local K V MAC MAC5 MAC6;
+
+	info ' Add...'
+
+	local IFS=$'\n\r';
+	for x in `ConfigListWithValue VLAN`; do
+		case ${x} in
+			*=* )
+				K=${x%=*};
+				V=${x#*=};
+				MAC5=`${sRoot}/dec2hex ${K:3}`;
+
+				info "  ${K} -> ${V}"
+
+				IFS=$' ,	';
+				ip link set dev "${K}" up
+				for v in ${V}; do
+					MAC6=`${sRoot}/dec2hex ${v}`;
+					MAC="${MAC4}:${MAC5:-ff}:${MAC6:-ff}";
+
+					info "   interface: ${K}.${v} -> ${MAC}"
+					ip link add name "${K}.${v}" link "${K}" type vlan id "${v}"
+					ip link set dev "${K}.${v}" down
+					ip link set dev "${K}.${v}" address "${MAC}"
+				done
+			;;
+		esac
+	done
+}
