@@ -143,13 +143,13 @@ RBindOnce(){ # src, target
 MountSpecialFS(){
 	MountOnce proc://DESL0/ /proc proc
 	MountOnce sysfs://DESL0/ /sys sysfs
-	MountOnce dev://DESL0/ /DRoot/DarkSystem/dev devtmpfs || MountOnce dev://DESL0/ /DRoot/DarkSystem/dev tmpfs size=1m
-	MountOnce devpts://DESL0/ /DRoot/DarkSystem/dev/pts devpts
-	MountOnce tmp://DESL0/ /DRoot/DarkSystem/tmp tmpfs
+	MountOnce tmp://DESL0/ /mnt tmpfs
+	MountOnce tmp://DESL0/ /tmp tmpfs
+	MountOnce dev://DESL0/ /dev devtmpfs || MountOnce dev://DESL0/ /dev tmpfs size=1m
+	MountOnce devpts://DESL0/ /dev/pts devpts
 
-	RBindOnce /DRoot/DarkSystem/dev /dev
-	RBindOnce /DRoot/DarkSystem/tmp /tmp
-
+#	RBindOnce /DRoot/DarkSystem/dev /dev
+#	RBindOnce /DRoot/DarkSystem/tmp /tmp
 	return 0;
 }
 
