@@ -143,8 +143,8 @@ RBindOnce(){ # src, target
 MountSpecialFS(){
 	MountOnce proc://DESL0/ /proc proc
 	MountOnce sysfs://DESL0/ /sys sysfs
-	MountOnce tmp://DESL0/ /mnt tmpfs
 	MountOnce tmp://DESL0/ /tmp tmpfs
+	MountOnce mnt://DESL0/ /mnt tmpfs
 	MountOnce dev://DESL0/ /dev devtmpfs || MountOnce dev://DESL0/ /dev tmpfs size=1m
 	MountOnce devpts://DESL0/ /dev/pts devpts
 
