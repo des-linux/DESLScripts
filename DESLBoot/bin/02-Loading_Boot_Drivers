@@ -6,20 +6,55 @@
 #//////////////////////////////////////////////////
 PREVCNT=65536;
 
-# Supported kernel cmdlines:
-#	rootwait=waittime(s)		Time in seconds to wait initialize storage devices.
-
 Main(){
-	LoadCmdline;
+	# LoadCmdline;
 
-	LoadBootDrivers;
+	DumpEEPROM;
+	LoadBootDriversLite;
 
 	echo 'I: Waiting boot device to initialize...'
-	sleep ${CMD_rootwait:-0}
+	sleep 1
 
 	echo "I: Mapping devices to '/dev'..."
 	RegisterDev scan
 
+	SaveKernelChecksum;
+
+	return 0;
+}
+
+DumpEEPROM(){
+	# Dump EEPROM for ath9k driver
+	/DRoot/DESLBoot/ath-dump /Test || return 0;
+
+	# Register /dev/mtd*
+	RegisterDev scan
+
+	local DIR='/lib/firmware';
+	mount -t tmpfs "tmp://DESL0${DIR}" "${DIR}"
+
+	/DRoot/DESLBoot/ath-dump "${DIR}"
+
+	echo "I: Copy 'regulatory.db'"
+	cp /DRoot/DESLBoot/regulatory.db "${DIR}" || return 1;
+
+	return 0;
+}
+
+SaveKernelChecksum() {
+	local IFS=$'\n\r';
+	for x in `cat /proc/mtd`; do
+		IFS='   "';
+		set -- ${x}
+		case "${4}" in
+			"kernel" | "linux" )
+				kernel_size=${2};
+			;;
+		esac
+	done
+
+	mtd ${kernel_size:+-c 0x$kernel_size} fixtrx firmware && return 0
+	mtd ${kernel_size:+-c 0x$kernel_size} fixseama firmware  && return 0
 	return 0;
 }
 
@@ -55,15 +90,37 @@ RegisterDev(){
 	[ -e '/dev/null' ] && return 0;
 	[ -e '/dev/zero' ] && return 0;
 
-	# 'devManager' method
+	# 'devManager' method (ROM after 2020/05/01)
 	/DRoot/DESLBoot/devManager ${1} && return 0;
 	devManager ${1} && return 0;
 
-	# 'devmm2name' method (No devtmpfs support or failed)
-	CheckDependencies;
-	devmm2name ${1} && return 0;
+	# 'devmm2name' method (ROM after 2019/05/01)
+	DEVMM2NAME_MTDBLOCK_MAJOR=31 devmm2name ${1} && return 0;
+
+	# Simple method (for MTD devices only)
+	RegisterDevMTD && return 0;
 
 	return 1;
+}
+
+RegisterDevMTD(){
+	for d in /sys/block/mtdblock*; do
+		DEV=`cat ${d}/dev`;
+		eval mknod /dev/${d##/*/} b ${DEV//:/ } 2>/dev/null
+	done
+
+	# Check USB existence
+	ls /sys/block/sd* >/dev/null 2>&1 || return 127;
+	for d in /sys/block/sd*; do
+		DEV=`cat ${d}/dev`;
+		eval mknod /dev/${d##/*/} b ${DEV//:/ } 2>/dev/null
+
+		for p in ${d}/sd*; do
+			DEV=`cat ${p}/dev`;
+			eval mknod /dev/${p##/*/} b ${DEV//:/ } 2>/dev/null
+		done
+	done
+	return 0;
 }
 
 CheckRedetectRequired(){
@@ -83,22 +140,20 @@ CheckRedetectRequired(){
 	return 1;
 }
 
-DetectAndLoadDevices(){
-	for m in /sys/bus/*/devices/*/modalias; do
-		modprobe `cat ${m}`
+DetectAndLoadDrvicesLite(){
+	/sbin/kmodloader
+	for l in /lib/modules/*/*.ko; do
+		l=${l##*/};
+		modprobe "${l%%.*}"
 	done
 
 	return 0;
 }
 
-LoadBootDrivers(){
-	echo 'I: Checking installed drivers...'
-	depmod
-	sleep 1
-
+LoadBootDriversLite(){
 	echo 'I: Loading drivers...'
 	while ! CheckRedetectRequired; do
-		DetectAndLoadDevices;
+		DetectAndLoadDrvicesLite;
 	done
 
 	return 0;

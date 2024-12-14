@@ -23,7 +23,6 @@ Main(){
 		cd "${ROOT_DIR}"; mount --move . /; exec chroot . '/DRoot/DarkSystem/DSLoader'
 	}
 
-	# For legacy root (No DSLoader)
 	# No exist check, already checked by "03-Preparing"
 	cd "${ROOT_DIR}"; mount --move . /; exec chroot . '/DRoot/DarkSystem/DarkSystem'
 

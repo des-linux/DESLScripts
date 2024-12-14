@@ -8,6 +8,8 @@ SELF=`readlink -f ${0}`
 sRoot=${SELF%/*};
 
 Main(){
+	"${sRoot}/../ShowState" 3
+
 	${DROOT:-/DRoot}/ServerLoader auto
 	case "${?}" in
 		250) return 250;;

@@ -9,6 +9,8 @@ sRoot=${SELF%/*};
 . "${sRoot}/../ConfigManager.sh"
 
 Main(){
+	${sRoot}/../ShowState 2
+
 	echo ' Initializing system...'
 	mount -o remount,ro /
 

@@ -6,7 +6,7 @@
 #//////////////////////////////////////////////////
 
 Main(){
-	InstallCoreTools;
+#	InstallCoreTools;
 	MountSpecialFS;
 	PatchRootFS;
 
@@ -19,14 +19,14 @@ InstallCoreTools(){
 
 	${CT} mkdir -p /mnt
 	${CT} mount -t tmpfs tmpfs://DESL0/mnt /mnt
-	[ "${?}" != '0' ] && {
+	[ ! "${?}" = '0' ] && {
 		echo "Failed to mount /mnt" >&3
 		exit 1;
 	}
 
 	${CT} mkdir -p ${CT0}
 	${CT} mount -t tmpfs tmpfs://DESL0/coretools0 ${CT0}
-	[ "${?}" != '0' ] && {
+	[ ! "${?}" = '0' ] && {
 		echo "Failed to mount ${CT0}" >&3
 		exit 1;
 	}
@@ -35,7 +35,7 @@ InstallCoreTools(){
 	${CT} mkdir -p ${CT0}/sbin
 	${CT} cp ${CT} ${CT0}/${CT}
 	${CT} chroot ${CT0} ${CT} --install -s
-	[ "${?}" != '0' ] && {
+	[ ! "${?}" = '0' ] && {
 		echo "Failed to install core tools." >&3
 		exit 1;
 	}
@@ -44,50 +44,9 @@ InstallCoreTools(){
 }
 
 PatchRootFS(){
-	local P_BIN_TOOLS=0;
-	local P_MODPROBE=0;
-	local P_VAR_IS_LINKED=0;
-	local P_RESOLV_CONF_IS_LINKED=0;
-	local P_DEPMOD=0;
-
 	set -- `cat /proc/version`
 	local KVER="${3}";
-
-	[ ! -e '/bin/mkdir' ] && P_BIN_TOOLS=1;
-	[ ! -e '/sbin/modprobe' ] && P_MODPROBE=1;
-	[ ! -L '/var' ] && P_VAR_IS_LINKED=1;
-	[ ! -L '/etc/resolv.conf' ] && P_RESOLV_CONF_IS_LINKED=1;
-	[ ! -e '/lib/modules/${KVER}/modules.dep' ] && P_DEPMOD=1;
-
-	[ "${P_BIN_TOOLS}${P_MODPROBE}${P_VAR_IS_LINKED}${P_RESOLV_CONF_IS_LINKED}${P_DEPMOD}" = '00000' ] && return 0;
-
-	mount -o remount,rw /
-
-	[ "${P_BIN_TOOLS}" = '1' ] && {
-		/bin/busybox --install -s
-	}
-
-	[ "${P_MODPROBE}" = '1' ] && {
-		ln -s /bin/busybox /sbin/modprobe
-	}
-
-	[ "${P_VAR_IS_LINKED}" = '1' ] && {
-		rm -rf /var
-		ln -s tmp /var
-	}
-
-	[ "${P_RESOLV_CONF_IS_LINKED}" = '1' ] && {
-		rm -f /etc/resolv.conf
-		ln -s /tmp/resolv.conf /etc/resolv.conf
-	}
-
-	[ "${P_DEPMOD}" = '1' ] && {
-		echo 'I: Generating kmodules database...'
-		depmod -a;
-	}
-
-	mount -o remount,ro /
-
+	[ ! -e "/lib/modules/${KVER}/modules.dep" ] && depmod -a
 	return 0;
 }
 
