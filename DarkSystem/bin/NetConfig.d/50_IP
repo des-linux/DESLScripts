@@ -60,7 +60,7 @@ IP4Config(){
 		 		ip link set "${K}" up
 
 				CallServerLoader stop  "DHCPC-${K}"
-				CallServerLoader start "DHCPC-${K}" ${DROOT}/DHCP/bin dhclient -4 -d ${DHC_ARGS} -sf "${DROOT}/DHCP/bin/dhclient-script" -lf "/var/dhclient.db" "${K}"
+				CallServerLoader start "DHCPC-${K}" ${DROOT}/DHCP/sbin dhclient -4 -d ${DHC_ARGS} -sf "${DROOT}/DHCP/sbin/dhclient-script" -lf "/var/dhclient.db" "${K}"
 			;;
 
 			*=* ) # Static IP

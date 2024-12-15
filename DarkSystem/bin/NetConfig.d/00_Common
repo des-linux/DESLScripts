@@ -18,7 +18,7 @@ ARGS_PARSER=${sRoot}/ArgsParser.sh;
 }
 
 CallServerLoader(){
-	${ServerLoader:-/DRoot/ServerLoader} "${@}" >/dev/null 2>&1
+	${ServerLoader:-/DRoot/ServerLoader} "${@}" > /dev/null 2>&1
 }
 
 LoadConfigFile(){
