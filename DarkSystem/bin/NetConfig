@@ -38,9 +38,11 @@ Main(){
 
 	local DIR="${sRoot}/NetConfig.d"
 
+	local OFS="${IFS}";
 	local IFS=$'\n\r';
 	local f m;
 	for f in ${DIR}/*; do
+		IFS="${OFS}";
 		m="${f##*/}";
 		m="${m##*_}"
 		. "${f}"
