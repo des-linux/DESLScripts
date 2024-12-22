@@ -19,14 +19,14 @@ InstallCoreTools(){
 
 	${CT} mkdir -p /mnt
 	${CT} mount -t tmpfs tmpfs://DESL0/mnt /mnt
-	[ "${?}" != '0' ] && {
+	[ ! "${?}" = '0' ] && {
 		echo "Failed to mount /mnt" >&3
 		exit 1;
 	}
 
 	${CT} mkdir -p ${CT0}
 	${CT} mount -t tmpfs tmpfs://DESL0/coretools0 ${CT0}
-	[ "${?}" != '0' ] && {
+	[ ! "${?}" = '0' ] && {
 		echo "Failed to mount ${CT0}" >&3
 		exit 1;
 	}
@@ -35,7 +35,7 @@ InstallCoreTools(){
 	${CT} mkdir -p ${CT0}/sbin
 	${CT} cp ${CT} ${CT0}/${CT}
 	${CT} chroot ${CT0} ${CT} --install -s
-	[ "${?}" != '0' ] && {
+	[ ! "${?}" = '0' ] && {
 		echo "Failed to install core tools." >&3
 		exit 1;
 	}
