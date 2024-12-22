@@ -1,0 +1,78 @@
+#!/bin/ash
+
+Main(){
+	local T="${1:-0}";
+	local IF="${2}";
+	local PK="${3}";
+	local DN="${4}";
+
+	T=$((T));
+	[ "${T}" = '0' ] && T=10;
+
+	echo "I: WireGuardNSWatcher: Interval: ${T}"
+	echo "I: WireGuardNSWatcher: Interface: ${IF}"
+	echo "I: WireGuardNSWatcher: PublicKey: ${PK}"
+	echo "I: WireGuardNSWatcher: DNS: ${DN}"
+
+	[ "${DN}" = '' ] && {
+		echo "E: No endpoint defined. Exit."
+		return 1;
+	}
+
+	while true; do
+		Check "${@}"
+		sleep ${T}
+	done
+
+	return 0;
+}
+
+Check(){
+	local T="${1}";
+	local IF="${2}";
+	local PK="${3}";
+	local DN="${4}";
+	local IFS x EP;
+	EP='';
+
+	IFS=$'\n\r';
+	for x in `wg show "${IF}"`; do
+		case "${x}" in
+			*endpoint:*) 
+				EP="${x#*:}";
+				EP="${EP%:*}";
+				EP="${EP// /}";
+				EP="${EP//\[/}";
+				EP="${EP//\]/}";
+			;;
+		esac
+	done
+	
+	[ "${EP}" = '' ] && {
+		echo "W: No endpoint defined. Setting..."
+		wg set "${IF}" peer "${PK}" endpoint "${DN}"
+		return 1;
+	}
+
+	IFS=$'\n\r';
+	for x in `nslookup "${DN%:*}"`; do
+		case "${x}" in
+			Address:*) 
+				x="${x#*:}";
+				x="${x// /}";
+				x="${x//	/}";
+				[ "${x}" = "${EP}" ] && {
+					return 0;
+				}
+			;;
+		esac
+	done
+	
+	echo "W: Endpoint IP address was changed from '${x}'. Updating..."
+	wg set "${IF}" peer "${PK}" endpoint "${DN}"
+	sleep 10
+	
+	return 1;
+}
+
+Main "${@}"
