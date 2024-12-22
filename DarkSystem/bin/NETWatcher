@@ -266,6 +266,10 @@ Test_SWLink(){
 	return 1;
 }
 
+Test_none(){
+	return 0;
+}
+
 error(){
 	echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2
 }
