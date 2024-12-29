@@ -107,7 +107,7 @@ InitializeDev(){
 			InitializeDevExec "${PHY}" "A${PHYn}:00" "w${PHYn}_AP"   "__ap"
 			InitializeDevExec "${PHY}" "C${PHYn}:00" "w${PHYn}_Sta"  "managed"
 			InitializeDevExec "${PHY}" "C${PHYn}:40" "w${PHYn}_4Adr" "managed 4addr on"
-			InitializeDevExec "${PHY}" "B${PHYn}:00" "w${PHYn}_MP"   "mp"
+			InitializeDevExec "${PHY}" "D${PHYn}:00" "w${PHYn}_MP"   "mp"
 		}
 	done
 }
