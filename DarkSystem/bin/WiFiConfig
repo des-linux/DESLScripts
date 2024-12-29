@@ -302,11 +302,11 @@ WConfigAPGlobal(){
 	ConfigGet V ${GRP}:DTIM 2
 	echo "dtim_period=${V}"
 
-	ConfigGet V ${GRP}:RTSThreshold 2347
-	echo "rts_threshold=${V}"
+	ConfigGet V ${GRP}:RTSThreshold 0
+	[ ! "${V}" = '0' ] && echo "rts_threshold=${V}"
 
-	ConfigGet V ${GRP}:FragmentThreshold 2346
-	echo "fragm_threshold=${V}"
+	ConfigGet V ${GRP}:FragmentThreshold 0
+	[ ! "${V}" = '0' ] && echo "fragm_threshold=${V}"
 
 	ConfigGet V ${GRP}:Preamble short
 	case ${V} in
