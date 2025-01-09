@@ -50,7 +50,7 @@ ClearEnvVariables(){
 		IFS=' =';
 		set -- ${e}
 		case "${2}" in
-			DESL_DEVID | DESL_HWID ) ;;
+			DESL_DEVID | DESL_HWID | DESL_SHOW_BOOT_LOG ) ;;
 			*) export -n ${2}; unset ${2};;
 		esac
 	done
