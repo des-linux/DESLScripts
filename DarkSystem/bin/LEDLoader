@@ -18,14 +18,14 @@ Main(){
 	local ByName="${BASE}/Name";
 	local ByOrder="${BASE}/Order";
 
-	echo "I: d-Network Router LED Configurator"
-	echo "I:	(C)2017-2025 Dark Network Systems"
-	echo "I:	http://e.xprj.net/"
+	info "DESLinux LED Configurator"
+	info "	(C)2017-2025 Dark Network Systems"
+	info "	http://e.xprj.net/"
 
 	local CONF=${ARGS_OPT_LONG_Config:-${sRoot}/../conf/LED.conf};
 
 	[ ! -e "${LED}" ] && {
-		echo "E: No LED support on this system."
+		error "No LED support on this system."
 		return 1;
 	}
 
@@ -50,10 +50,10 @@ Main(){
 }
 
 InitLED(){
-	echo "I: Initializing LED..."
+	info "Initializing LED..."
 	local IFS=$'\n\r';
 	for a in `ls ${LED}`; do
-		echo none > ${LED}/${a}/trigger
+		echo 'none' > ${LED}/${a}/trigger
 	done
 	return 0;
 }
@@ -69,7 +69,7 @@ MakeLEDDir(){
 	for a in `ConfigFileList "${CONF}" Name`; do
 		K=${a%%=*};
 		V=${a#*=};
-		echo "I: LED Name: ${K} -> ${V}"
+		info "LED Name: ${K} -> ${V}"
 		ln -s "${LED}/${V}" "${ByName}/${K}"
 	done
 
@@ -77,7 +77,7 @@ MakeLEDDir(){
 	IFS=$'\n\r';
 	local N=0;
 	for a in `ConfigFileList "${CONF}" Order`; do
-		echo "I: LED Order[$((N))] -> ${a}"
+		info "LED Order[$((N))] -> ${a}"
 		ln -s "${ByName}/${a}" "${ByOrder}/$((N))"
 		N=$((N+1));
 	done
@@ -143,5 +143,10 @@ SetLED(){
 
 	return 0;
 }
+
+error(){ echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2; }
+warning(){ echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2; }
+infoex(){ echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"; }
+info(){ echo -e "I: ${*}"; }
 
 Main "${@}";
