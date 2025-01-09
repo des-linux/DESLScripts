@@ -53,23 +53,13 @@ PatchRootFS(){
 	set -- `cat /proc/version`
 	local KVER="${3}";
 
-	[ ! -e '/bin/mkdir' ] && P_BIN_TOOLS=1;
-	[ ! -e '/sbin/modprobe' ] && P_MODPROBE=1;
 	[ ! -L '/var' ] && P_VAR_IS_LINKED=1;
 	[ ! -L '/etc/resolv.conf' ] && P_RESOLV_CONF_IS_LINKED=1;
-	[ ! -e '/lib/modules/${KVER}/modules.dep' ] && P_DEPMOD=1;
+	[ ! -e "/lib/modules/${KVER}/modules.dep" ] && P_DEPMOD=1;
 
 	[ "${P_BIN_TOOLS}${P_MODPROBE}${P_VAR_IS_LINKED}${P_RESOLV_CONF_IS_LINKED}${P_DEPMOD}" = '00000' ] && return 0;
 
 	mount -o remount,rw /
-
-	[ "${P_BIN_TOOLS}" = '1' ] && {
-		/bin/busybox --install -s
-	}
-
-	[ "${P_MODPROBE}" = '1' ] && {
-		ln -s /bin/busybox /sbin/modprobe
-	}
 
 	[ "${P_VAR_IS_LINKED}" = '1' ] && {
 		rm -rf /var
