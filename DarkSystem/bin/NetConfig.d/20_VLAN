@@ -21,7 +21,7 @@ VLANInit(){
 	info ' Delete existing...'
 
 	local IFS=$'\n\r';
- 	for x in `ip link`; do
+ 	for x in `ip link show type vlan`; do
 		[ "${x:0:1}" = ' ' ] && continue
 		x=${x#*: };
 		IF=${x%:*};

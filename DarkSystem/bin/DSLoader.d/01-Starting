@@ -46,7 +46,32 @@ InstallCoreTools(){
 PatchRootFS(){
 	set -- `cat /proc/version`
 	local KVER="${3}";
-	[ ! -e "/lib/modules/${KVER}/modules.dep" ] && depmod -a
+
+	[ ! -L '/var' ] && P_VAR_IS_LINKED=1;
+	[ ! -L '/etc/resolv.conf' ] && P_RESOLV_CONF_IS_LINKED=1;
+	[ ! -e "/lib/modules/${KVER}/modules.dep" ] && P_DEPMOD=1;
+
+	[ "${P_BIN_TOOLS}${P_MODPROBE}${P_VAR_IS_LINKED}${P_RESOLV_CONF_IS_LINKED}${P_DEPMOD}" = '00000' ] && return 0;
+
+	mount -o remount,rw /
+
+	[ "${P_VAR_IS_LINKED}" = '1' ] && {
+		rm -rf /var
+		ln -s tmp /var
+	}
+
+	[ "${P_RESOLV_CONF_IS_LINKED}" = '1' ] && {
+		rm -f /etc/resolv.conf
+		ln -s /tmp/resolv.conf /etc/resolv.conf
+	}
+
+	[ "${P_DEPMOD}" = '1' ] && {
+		echo 'I: Generating kmodules database...'
+		depmod -a;
+	}
+
+	mount -o remount,ro /
+
 	return 0;
 }
 

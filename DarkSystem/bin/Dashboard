@@ -126,7 +126,7 @@ echo 'Disks:'
 	ClearDevName
 	local NAME;
 	local IFS=$'\n\r';
-	for l in `df`; do
+	for l in `df 2>&1`; do
 		IFS=$' 	';
 		set -- ${l}
 		GetDevName ${1} || continue;
@@ -158,38 +158,63 @@ Network:
 Interfaces:
 EOF
 
-	local IFNAME MACADDR IP4ADDR IP6ADDR;
+	local MACADDR IP4ADDR IP6ADDR;
+	local IFNAME='lo';
 	local IFS=$'\n\r';
-	for l in `ifconfig`; do
+	for l in `ip address show `; do
+		[ ! "${l:0:1}" = ' ' ] && {
+			# Output current
+			ShowNetwork_Interface
 
-	[ ! "${l:0:1}" = ' ' ] && {
-		IFS=$' 	';
-		set -- ${l}
-		IFNAME=${1};
-		MACADDR=${5};
-		IP4ADDR='-';
-		IP6ADDR='-';
-		continue;
-	}
+			# Prepare for next device
+			[ ! "${l}" = "${l//master/}" ] && {
+				IFNAME='lo';
+				continue;
+			}
 
-	IFS=$'	 ';
-	set -- ${l};
-	[ "${1}" = 'inet' ] && {
-		IP4ADDR=${2:5};
-	}
-
-	[ "${1:0:2}" = 'UP' ] && {
-		[ "${IFNAME:0:3}" = 'b0_' ] && {
-			local TAB='';
-			[ "${IFNAME:8:1}" = '' ] && IFNAME="${IFNAME}	";
-			[ "${IP4ADDR:14:1}" = '' ] && TAB='	';
-			[ "${IP4ADDR:6:1}" = '' ] && TAB='		';
-			echo "	${IFNAME}	: ${IP4ADDR}${TAB}	${MACADDR}"
+			IFS=$':';
+			set -- ${l}
+			IFNAME="${2:1}";
+			IFNAME="${IFNAME%@*}";
+			MACADDR='-';
+			IP4ADDR='-';
+			IP6ADDR='-';
+			continue;
 		}
-	}
 
+		IFS=$'\n\r';
+		case "${l}" in
+			*link/ether*)
+				MACADDR="${l#*link/ether }";
+				MACADDR="${MACADDR%% *}";
+			;;
+			*inet\ *)
+				[ "${IP4ADDR}" = '-' ] && {
+					IP4ADDR="${l#*inet }";
+					IP4ADDR="${IP4ADDR%% *}";
+				}
+			;;
+			*inet6\ *)
+				IP6ADDR="${l#*inet }";
+				IP6ADDR="${IP6ADDR%% *}";
+			;;
+		esac
 	done
+
+	# SHow last 1
+	ShowNetwork_Interface
 	return 0;
+}
+
+ShowNetwork_Interface(){
+	[ "${IFNAME}" = 'lo' ] && return 0;
+
+	local TAB='	';
+	case "${#IFNAME}" in
+		[1-7]) TAB='		';;
+		8|9|10|11|12|13|14|15) TAB='	';;
+	esac
+	echo "	${IFNAME}${TAB}: ${MACADDR}	${IP4ADDR}"
 }
 
 TestNet(){

@@ -1,0 +1,49 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//LoadKModules :: Load kernel modules
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+SELF=`readlink -f ${0}`
+sRoot=${SELF%/*};
+
+. ${sRoot}/ConfigManager.sh
+. ${sRoot}/ArgsParser.sh
+
+Main() {
+	info 'Kernel module loader'
+	info '	(C)2024-2025 Dark Network Systems'
+	info '	http://e.xprj.net/'
+
+	ParseArgs ${*};
+
+	CONF_FILE="${ARGS_OPT_LONG_Config:-${sRoot}/../conf/KModules.conf}";
+
+	if [ ! -e "${CONF_FILE}" ]; then
+		error "E: Configuration file '${CONF_DIR}' is not found."
+		return 1;
+	fi
+
+	local x;
+	local R=0;
+	local IFS=$'\n\r';
+	for x in `ConfigFileList "${CONF_FILE}" KModules`; do
+		IFS=' ';
+		set -- ${x}
+		info "Loading module: ${1}${2:+ [${2}]}"
+		[ ! "${x:0:1}" = '!' ] && {
+			modprobe ${x}
+		} || {
+			rmmod -f ${1:1}
+		}
+	done
+
+	return ${R};
+}
+
+error(){ echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2; }
+warning(){ echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2; }
+infoex(){ echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"; }
+info(){ echo -e "I: ${*}"; }
+
+Main "${@}";

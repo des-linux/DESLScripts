@@ -10,10 +10,18 @@ sRoot=${SELF%/*};
 Main(){
 	${sRoot}/../ShowState 4
 
-	[ ! -e "${sRoot}/../../conf/WiFi" ] && {
-		return 250;
+	"${sRoot}/../WiFiConfig" || {
+		case "${?}" in
+			250)
+				echo 'NOT INSTALLED' >&9
+				return 250
+			;;
+			*)
+				echo 'WARNING' >&9
+				return 250;
+			;;
+		esac
 	}
-	${sRoot}/../WiFiConfig
 
 	return 0;
 }

@@ -1,0 +1,198 @@
+#!/bin/ash
+#!INCLUDE_ONLY
+#//////////////////////////////////////////////////
+#//DESLinux NetConfig.d :: Network Configurator
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+WireGuard_Main(){
+
+	[ ! -e "${ARGS_OPT_LONG_ConfigDir:-/DRoot/DarkSystem/conf/wireguard.d}" ] && {
+		return 0;
+	}
+
+	modprobe wireguard
+	WireGuardCheck || {
+		warning "wireguard is not supported in this system"
+		return 0;
+	}
+	
+	WireGuardInit || return 1;
+	WireGuardCreate || return 1;
+	
+	return 0;
+}
+
+WireGuardCheck(){
+	ip link add name wg_test type wireguard || return 1;
+	ip link del dev wg_test
+	return 0;
+}
+
+WireGuardInit(){
+	local x IF;
+	local IFS=$'\n\r';
+	for x in `ip link show type wireguard`; do
+		[ "${x:0:1}" = ' ' ] && continue
+		x=${x#*: };
+		IF=${x%:*};
+		ip link set dev "${IF}" down
+		ip link del dev "${IF}"
+	done
+	
+	local IFS=$'\n\r';
+	for x in `"${SERVERLOADER:-/DRoot/ServerLoader}" list`; do
+		case "${x}" in
+			WireGuard-NS-*) 
+				CallServerLoader stop "${x}"
+			;;
+		esac
+	done
+	return 0;
+}
+
+WireGuardCreate(){
+	local x IF wgArg TEMP;
+	for x in ${ARGS_OPT_LONG_ConfigDir:-/DRoot/DarkSystem/conf/wireguard.d}/*.conf; do
+		IF="${x##*/}";
+		IF="${IF%.*}";
+		
+		info "Adding wireguard interface '${IF}'..."
+		
+		ConfigLoad "${x}"
+
+		WireGuardCreateInterface || continue;
+
+		WireGuardCreatePeer "${IF}" "${x}" || continue;
+	done
+}
+
+WireGuardCreateInterface(){
+	local x IFS;
+	ip link add name "${IF}" type wireguard
+	ip link set dev "${IF}" up
+	
+	wgArg="${IF}";
+	
+	ConfigGet TEMP Interface:ListenPort ''
+	[ ! "${TEMP}" = '' ] && {
+		wgArg="${wgArg} listen-port ${TEMP}";
+	}
+
+	ConfigGet TEMP Interface:FwMark ''
+	[ ! "${TEMP}" = '' ] && {
+		wgArg="${wgArg} fwmark ${TEMP}";
+	}
+
+	ConfigGet TEMP Interface:PrivateKey ''
+	[ ! "${TEMP}" = '' ] && {
+		echo "${TEMP}" | wg set ${wgArg} private-key /proc/self/fd/0 || return 1;
+	} || {
+		wg set ${wgArg} || return 1;
+	}
+
+	ConfigGet TEMP Interface:Address ''
+	[ ! "${TEMP}" = '' ] && {
+		IFS=$' ,	';
+		for x in ${TEMP}; do
+			case "${x}" in
+				*.*) ip -4 address add "${x}" dev "${IF}";;
+				*:*) ip -6 address add "${x}" dev "${IF}";;
+				*) error "Unknown address format: '${x}'";;
+			esac
+			
+		done
+	}
+	
+	return 0;
+}
+
+WireGuardCreatePeer(){ # IF, conf
+	local IF="${1}";
+	local CFG="${2}";
+	local TEMP wgArg PublicKey Endpoint;
+	
+	local N=0;
+	local T=0;
+	
+	for x in `ConfigSearchGroup 'Peer'`; do
+		info "Adding '${x}'"
+		wgArg="${IF}";
+
+		ConfigGet PublicKey "${x}:PublicKey" ''
+		[ ! "${PublicKey}" = '' ] && {
+			wgArg="${wgArg} peer ${PublicKey}";
+		}
+
+		ConfigGet TEMP "${x}:PersistentKeepalive" ''
+		[ ! "${TEMP}" = '' ] && {
+			wgArg="${wgArg} persistent-keepalive ${TEMP}";
+		}
+
+		ConfigGet TEMP "${x}:AllowedIPs" ''
+		[ ! "${TEMP}" = '' ] && {
+			wgArg="${wgArg} allowed-ips ${TEMP// /}";
+			AddRoute "${IF}" "${TEMP// /}"
+		}
+
+		ConfigGet TEMP "${x}:PresharedKey" ''
+		[ ! "${TEMP}" = '' ] && {
+			echo "${TEMP}" | wg set ${wgArg} preshared-key /proc/self/fd/0 || return 1;
+		} || {
+			wg set ${wgArg} || return 1;
+		}
+
+		ConfigGet Endpoint "${x}:Endpoint" ''
+		N=$((N+1));
+
+		ConfigGet T "${x}:DNSRecheckInterval" 0
+		[ "${T}" = '0' ] && {
+			ConfigGet T "${x}:PersistentKeepalive" 0
+		}
+
+		# Endpoint always has ':<port>'. (If not, wg returns error)
+		case "${Endpoint%:*}" in
+			*:*) SetEndpointRaw "${IF}" "${PublicKey}" "${Endpoint}";; # direct IPv6, no watcher process required
+			*[a-z.]) StartDNSWatcher "${N}" "${T}" "${IF}" "${PublicKey}" "${Endpoint%}";;
+			*.*) SetEndpointRaw "${IF}" "${PublicKey}" "${Endpoint}";; # direct IPv4, no watcher process required
+		esac
+	done
+	return 0;
+}
+
+AddRoute(){
+	local IF="${1}";
+	local R="${2}";
+	local IFS=$' ,	';
+	local x;
+	for x in ${R}; do
+		case "${x}" in
+			*.*) ip -4 route add "${x}" dev "${IF}";;
+			*:*) ip -6 route add "${x}" dev "${IF}";;
+			*) error "Unknown address format: '${x}'"; return 1;;
+		esac		
+	done
+}
+
+SetEndpointRaw(){
+	local IF="${1}";
+	local PublicKey="${2}";
+	local Endpoint="${3}";
+	wg set "${IF}" peer "${PublicKey}" endpoint "${Endpoint// /}" || return 1;
+	return 0;
+}
+
+StartDNSWatcher(){
+	local N="${1}";
+	local T="${2}";
+	local IF="${3}";
+	local PK="${4}";
+	local DN="${5}";
+
+	CallServerLoader stop "WireGuard-NS-${IF}-${N}"
+	CallServerLoader start "WireGuard-NS-${IF}-${N}" /DRoot/DarkSystem/bin WGNSWatcher "${T}" "${IF}" "${PK}" "${DN}"
+
+	return 0;
+}
+

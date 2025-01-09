@@ -10,6 +10,8 @@ sRoot=${SELF%/*};
 . ${sRoot}/ConfigManager.sh
 
 Main(){
+	CheckIW || return 250;
+
 	local WIFI_CONF_DIR="${sRoot}/../conf/WiFi";
 	local WIFI_TMP_DIR="/tmp/DWFConfig";
 	local WIFI_CTRL_DIR="${WIFI_TMP_DIR}/ctrl";
@@ -41,7 +43,7 @@ Main(){
 		case ${a} in
 			/Config:*)
 				WIFI_CONF_DIR=${a#*:};
-				echo "I: Using configuration folder \"${1}\""
+				info "Using configuration folder \"${1}\""
 				;;
 			/MAC4:*)	MAC4=${a#*:};;
 			/AP)		EXECAP=1;;
@@ -64,6 +66,15 @@ Main(){
 
 }
 
+CheckIW(){
+	iw 2>/dev/null
+	if [ "${?}" = "127" ]; then
+		warning "'iw' command is not found."
+		return 1;
+	fi
+	return 0;
+}
+
 InitializeDevExec(){ # phy, mode, dev, type
 	local P="${1}";
 	local M="${2}";
@@ -75,7 +86,7 @@ InitializeDevExec(){ # phy, mode, dev, type
 	iw dev ${D} del
 
 	MAC="${MAC4:-02:00:00:00}:${M}";
-	echo "I:   ${D}	-> ${MAC}"
+	info "  ${D}	-> ${MAC}"
 	iw phy ${PHY} interface add ${D} type ${T}
 	ip link set dev ${D} address "${MAC}"
 }
@@ -83,7 +94,7 @@ InitializeDevExec(){ # phy, mode, dev, type
 InitializeDev(){
 	local PHY PHYn PHYnH AP STA;
 
-	echo "I: Initializing device..."
+	info "Initializing device..."
 
 	local MAC;
 	local IFS=$'\n\r';
@@ -99,7 +110,7 @@ InitializeDev(){
 			PHYnH=${PHYn};
 			PHYnH=`${sRoot}/dec2hex ${PHYnH}`
 
-			echo "I:  ${PHY} ..."
+			info " ${PHY} ..."
 
 			${ServerLoader} stop "AP_${PHYn}" >${NUL} 2>&1
 			${ServerLoader} stop "STA_${PHYn}" >${NUL} 2>&1
@@ -113,10 +124,6 @@ InitializeDev(){
 }
 
 ##########
-
-error(){
-	echo "${*}" 1>&2;
-}
 
 GetIPAddr(){ # if
 	local IFS=$' \t';
@@ -787,5 +794,10 @@ ExecMP(){
 		MPn=$((MPn+1));
 	done
 }
+
+error(){ echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2; }
+warning(){ echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2; }
+infoex(){ echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"; }
+info(){ echo -e "I: ${*}"; }
 
 Main "${@}"

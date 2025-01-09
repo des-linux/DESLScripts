@@ -270,18 +270,9 @@ Test_none(){
 	return 0;
 }
 
-error(){
-	echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2
-}
-warning(){
-	echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2
-}
-infoex(){
-	echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"
-}
-info(){
-	echo -e "I: ${*}"
-}
-
+error(){ echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2; }
+warning(){ echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2; }
+infoex(){ echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"; }
+info(){ echo -e "I: ${*}"; }
 
 Main "${@}";
