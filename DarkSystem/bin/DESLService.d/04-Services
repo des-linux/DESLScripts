@@ -8,10 +8,12 @@ SELF=`readlink -f ${0}`
 sRoot=${SELF%/*};
 
 Main(){
-	${DROOT:-/DRoot}/ServerLoader auto
-	case "${?}" in
-		250) return 250;;
-	esac
+	"${DROOT:-/DRoot}/ServerLoader" auto || {
+		case "${?}" in
+			250) return 250;;
+		esac
+	}
+
 	return 0;
 }
 

@@ -8,17 +8,18 @@ SELF=`readlink -f ${0}`
 sRoot=${SELF%/*};
 
 Main(){
-	# [Deprecated, will remove]
-	[ -e "/usr/lib/xtables/xtables.sqfs" ] && {
-		mount -t squashfs -o ro /usr/lib/xtables/xtables.sqfs /usr/lib/xtables
+	"${sRoot}/../NFTConfig" || {
+		case "${?}" in
+			250)
+				echo 'NOT INSTALLED' >&9
+				return 250
+			;;
+			*)
+				echo 'WARNING' >&9
+				return 250;
+			;;
+		esac
 	}
-
-	"${sRoot}/../NFTConfig"
-	case "${?}" in
-		250) return 250;;
-		0) ;;
-		*) echo 'WARNING' >&9;;
-	esac
 
 	return 0;
 }

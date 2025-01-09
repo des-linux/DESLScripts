@@ -10,6 +10,7 @@ sRoot=${SELF%/*};
 Main(){
 	"${sRoot}/../NetConfig" || {
 		echo 'WARNING' >&9
+		return 250;
 	}
 
 	return 0;
