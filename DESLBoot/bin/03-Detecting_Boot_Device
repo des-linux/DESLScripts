@@ -4,6 +4,8 @@
 #//	(C)2014-2025 Dark Embedded Systems.
 #//	http://e.xprj.net/
 #//////////////////////////////////////////////////
+MARKER_FILE='.deslroot';
+ROOTFS_FILE='DESLinux.dla';
 ROOT_MOUNT_DIR='/mnt/root';			# In all patterns, location treated as root will mount here.
 DSYSTEM='/DRoot/DarkSystem/DarkSystem';
 LED_BASE='/sys/class/leds/';
@@ -90,7 +92,7 @@ PrepareDSFromNAND(){
 
 PrepareDSFromUSB(){
 	InitializeUSB
-	DetectUSB ${ROOT_MOUNT_DIR} '.deslroot' || return 1;
+	DetectUSB ${ROOT_MOUNT_DIR} "${MARKER_FILE}" "${ROOTFS_FILE}" || return 1;
 	[ ! -f "${ROOT_MOUNT_DIR}/${DSYSTEM}" ] && return 1;
 
 	return 0;
@@ -152,12 +154,14 @@ DetectMTD(){ # MountDir, Marker
 	return 0;
 }
 
-DetectUSB(){ # MountDir, Marker
+DetectUSB(){ # MountDir, Marker, Marker(dla)
 	local MOUNT_DIR=${1};
-	local MARKER=${2};
+	local MARKER1=${2};
+	local MARKER2=${3};
 	local TEST_DIR='/mnt/usbkey_test';
 	local TEST_FILE='.test'
 	local SDX;
+	local R=0;
 
 	umount "${TEST_DIR}"
 	umount "${MOUNT_DIR}"
@@ -168,9 +172,13 @@ DetectUSB(){ # MountDir, Marker
 	ls -l /sys/block/sd* >/dev/null 2>&1 || return 1; # No USB detected
 
 	for SDX in `ls /dev/sd??*`; do
+		R=0;
 		echo I: Checking ${SDX}...
 		MountEx "${SDX}" "${TEST_DIR}" rw 2>/dev/null
-		[ -f "${TEST_DIR}/${MARKER}" ] && {
+
+		[ -f "${TEST_DIR}/${MARKER1}" ] && R=1;
+		[ -f "${TEST_DIR}/${MARKER2}" ] && R=1;
+		[ "${R:-0}" = '1' ] && {
 			umount "${TEST_DIR}"
 			MountEx "${SDX}" "${MOUNT_DIR}" rw 2>/dev/null
 			return 0;
