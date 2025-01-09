@@ -4,7 +4,7 @@
 #//	(C)2014-2025 Dark Embedded Systems.
 #//	http://e.xprj.net/
 #//////////////////////////////////////////////////
-ROOTFS_FILE='DESLinux_rootfs.tar';
+ROOTFS_FILE='DESLinux.dla';
 ROOT_MOUNT_DIR='/mnt/root';
 START_CDIR="${PWD:-/DRoot/DESLBoot/bin}";
 
@@ -47,12 +47,10 @@ ExtractRootFS(){
 	echo 'I: Extracting rootfs...'
 	cd "${ROOT_MOUNT_DIR}" || ExtractError
 
-	mv "${ROOTFS_FILE}" "/${ROOTFS_FILE}" || ExtractError
-
-	tar xf "/${ROOTFS_FILE}" > /dev/null 2>&4 || ExtractError
+	cpio -i -u -F "${ROOTFS_FILE}" > /dev/null 2>&4 || ExtractError
 	sync
 
-	rm -f "/${ROOTFS_FILE}"
+	rm -f "${ROOTFS_FILE}"
 
 	cd "${START_CDIR}"
 

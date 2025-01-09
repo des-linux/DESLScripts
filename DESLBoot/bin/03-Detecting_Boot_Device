@@ -5,7 +5,7 @@
 #//	http://e.xprj.net/
 #//////////////////////////////////////////////////
 MARKER_FILE='.deslroot';
-ROOTFS_FILE='DESLinux_rootfs.tar';
+ROOTFS_FILE='DESLinux.dla';
 ROOT_MOUNT_DIR='/mnt/root';			# In all patterns, location treated as root will mount here.
 ROOT_DIR_MOUNT_DIR='/mnt/rootdir';		# If 'rootdir=' option, real root device will mount here. bind 'rootdir=' to 'ROOT_MOUNT_DIR'
 
@@ -16,7 +16,7 @@ ROOT_DIR_MOUNT_DIR='/mnt/rootdir';		# If 'rootdir=' option, real root device wil
 Main(){
 	LoadCmdline;
 	MARKER_FILE="${CMD_rootmarker:-.deslroot}"
-	ROOTFS_FILE="${CMD_rootfiles:-DESLinux_rootfs.tar}"
+	ROOTFS_FILE="${CMD_rootfiles:-DESLinux.dla}"
 
 	MountFS;
 	return 0;
