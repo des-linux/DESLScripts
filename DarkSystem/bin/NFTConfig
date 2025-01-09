@@ -19,14 +19,14 @@ CheckNFTables(){
 	return 0;
 }
 
-Main() { # (IPTables.conf)
+Main() {
 	ParseArgs ${*};
 
-	CheckNFTables || return 250;
+	info 'DESLinux Network Flow Table Configurator'
+	info '	(C)2016-2025 Dark Network Systems'
+	info '	http://e.xprj.net/'
 
-	echo "I: d-Network Router Network Configurator"
-	echo "I: 	(C)2016-2025 Dark Network Systems"
-	echo "I: 	http://e.xprj.net/"
+	CheckNFTables || return 250;
 
 	CONF_DIR="${ARGS_OPT_LONG_Config:-${sRoot}/../conf/nftables.d}";
 
@@ -56,6 +56,9 @@ PortForwards(){
 	local K V;
 	local PRID SRCP DSTI DSTP PRNM;
 	ConfigLoad "${1}" || return 1;
+
+	nft add table ip PortForwards || return 1;
+	nft add chain PortForwards PreRouting '{ type nat hook prerouting priority dstnat; policy accept; }'
 
 	for t in `ConfigSearchGroup`; do
 		[ "${t}" = 'Global' ] && t='';
@@ -88,7 +91,7 @@ PortForwards(){
 						ICMP|icmp)	PRID='1';;
 						ICMP6|icmp6)	PRID='581';;
 					esac
-					nft "add rule ip nat PREROUTING ${t:+iifname ${t}} ${PRNM:+${PRNM}} ${PRID:+ip protocol ${PRID}} ${SRCP:+dport ${SRCP}} dnat to ${DSTI}${DSTP:+:${DSTP}}" || R=${?};
+					nft "add rule ip PortForwards PreRouting counter ${t:+iifname ${t}} ${PRNM:+${PRNM}} ${PRID:+ip protocol ${PRID}} ${SRCP:+dport ${SRCP}} dnat to ${DSTI}${DSTP:+:${DSTP}}" || R=${?};
 				;;
 			esac
 		done
@@ -97,17 +100,9 @@ PortForwards(){
 	return ${R};
 }
 
-error(){
-	echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2
-}
-warning(){
-	echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2
-}
-infoex(){
-	echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"
-}
-info(){
-	echo -e "I: ${*}"
-}
+error(){ echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2; }
+warning(){ echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2; }
+infoex(){ echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"; }
+info(){ echo -e "I: ${*}"; }
 
 Main "${@}";
