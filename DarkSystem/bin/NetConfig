@@ -15,9 +15,9 @@ Main(){
 
 	. ${sRoot}/ConfigManager.sh
 
-	echo "I: d-Network Router Network Configurator"
-	echo "I: 	(C)2016-2025 Dark Network Systems"
-	echo "I: 	http://e.xprj.org/"
+	info 'DESLinux Network Configurator'
+	info '	(C)2016-2025 Dark Network Systems'
+	info '	http://e.xprj.org/'
 
 	ConfigLoad "${CONF_DIR}/System.conf"
 
@@ -33,8 +33,8 @@ Main(){
 	export SC_BaseMAC
 
 	echo "${SC_HostName}" >/proc/sys/kernel/hostname
-	echo "I: Hostname	: ${SC_HostName}"
-	echo "I: Hardware ID	: ${SC_BaseMAC}"
+	info "Hostname	: ${SC_HostName}"
+	info "Hardware ID	: ${SC_BaseMAC}"
 
 	local DIR="${sRoot}/NetConfig.d"
 
@@ -52,17 +52,9 @@ Main(){
 	return 0;
 }
 
-error(){
-	echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2
-}
-warning(){
-	echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2
-}
-infoex(){
-	echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"
-}
-info(){
-	echo -e "I: ${*}"
-}
+error(){ echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2; }
+warning(){ echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2; }
+infoex(){ echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"; }
+info(){ echo -e "I: ${*}"; }
 
 Main "${@}"

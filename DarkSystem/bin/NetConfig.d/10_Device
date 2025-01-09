@@ -6,32 +6,73 @@
 #//////////////////////////////////////////////////
 
 Device_Main(){
+	DeviceDel
 	DeviceInit
 	return 0;
 }
 
-DeviceInit(){
-	local MAC5 IF;
-	info "Initialize network interfaces..."
+DeviceDel(){
+	info ' Delete additional interfaces...'
 
- 	local IFS=$'\n\r';
-	for x in `ip link`; do
+	local IFS=$'\n\r';
+ 	for x in `ip link show`; do
 		[ "${x:0:1}" = ' ' ] && continue
 		x=${x#*: };
 		IF=${x%:*};
 
  		case "${IF}" in
- 			*@* ) ;;
+ 			*@NONE ) ;;
+			* )
+				IFx=${IF%@*};
+				info "  ${IFx}"
+		 		ip link set dev "${IFx}" down
+				ip link delete dev "${IFx}" > /dev/null 2>&1
+			;;
+		esac
+	done
+	return 0;
+}
+
+DeviceInit(){
+	local MAC5 IF IFx;
+	info "Initialize network interfaces..."
+
+	local DSAn=64; # 64: 0x40
+ 	local IFS=$'\n\r';
+	for x in `ip link show`; do
+		[ "${x:0:1}" = ' ' ] && continue
+		x=${x#*: };
+		IF=${x%:*};
+
+ 		case "${IF}" in
+			*@eth* ) # Remaining after DeviceDel: may be DSA interfaces
+				IFx=${IF%@*};
+				MAC5=`${sRoot}/dec2hex ${DSAn}`;
+				DSAn=$((DSAn+1));
+				case "${MAC5}" in
+					[4-7][0-f] )
+						DeviceSetHWAddr "${IFx}" "${MAC4}:${MAC5}:00";
+					;;
+
+					* )
+		 				warning " Max supported DSA interfaces are 63. '${IF}' is ignored."
+					;;
+				esac
+			;;
+
+ 			*@* )
+				warning " Unsupported device: ${IF}"
+			;;
 
  			eth* )
 				MAC5=`${sRoot}/dec2hex ${IF:3}`;
 				case "${MAC5}" in
-					[0-7][0-f] )
+					[0-3][0-f] )
 						DeviceSetHWAddr "${IF}" "${MAC4}:${MAC5}:00";
 					;;
 
 					* )
-		 				warning " Max supported interfaces are 127. '${IF}' is ignored."
+		 				warning " Max supported interfaces are 63. '${IF}' is ignored."
 					;;
 				esac
 			;;
@@ -47,6 +88,7 @@ DeviceInit(){
 
 		esac
 	done
+
 	return 0;
 }
 
