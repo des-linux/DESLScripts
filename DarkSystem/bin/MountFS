@@ -1,0 +1,282 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//MountFS :: Mount filesystem
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+SELF=`readlink -f ${0}`
+sRoot=${SELF%/*};
+
+. ${sRoot}/ConfigManager.sh
+. ${sRoot}/ArgsParser.sh
+
+Main() {
+	info 'Filesystem mounter'
+	info '	(C)2016-2025 Dark Network Systems'
+	info '	http://e.xprj.net/'
+
+	ParseArgs "${@}";
+
+	CONF_FILE="${ARGS_OPT_LONG_Config:-${sRoot}/../conf/Mounts.conf}";
+
+	if [ ! -e "${CONF_FILE}" ]; then
+		error "E: Configuration file '${CONF_DIR}' is not found."
+		return 1;
+	fi
+	ConfigLoad "${CONF_FILE}" || return ${?};
+
+	[ ! "${ARGS_OPT_LONG_u}${ARGS_OPT_LONG_Unmount}${ARGS_OPT_LONG_unmount}" = '' ] && {
+		Unmount
+		return ${?};
+	}
+
+	# DESL format
+	XMountFS_DESL 'm' 'Mount' || R=1
+
+	local x;
+	local R=0;
+	for x in `ConfigSearchGroup Mount_`; do
+		[ "${x}" = 'Mount' ] && continue;
+		XMountFS_DESL 'm' "${x}" || R=1
+	done
+
+	# fstab format
+	local IFS=$'\n\r';
+	for x in `ConfigFileList "${CONF_FILE}" 'fstab'`; do
+		IFS=' 	';
+		set -- ${x}
+		XMountFS_fstab 'm' "${1}" "${2}" "${3}" "${4}"
+	done
+
+	return ${R};
+}
+
+Unmount(){
+	# DESL format
+	XMountFS_DESL 'u' 'Mount' || R=1
+
+	local x;
+	local R=0;
+	for x in `ConfigSearchGroup Mount_`; do
+		[ "${x}" = 'Mount' ] && continue;
+		XMountFS_DESL 'u' "${x}" || R=1
+	done
+
+	# fstab format
+	local IFS=$'\n\r';
+	for x in `ConfigFileList "${CONF_FILE}" 'fstab'`; do
+		IFS=' 	';
+		set -- ${x}
+		XMountFS_fstab 'u' "${1}" "${2}" "${3}"
+	done
+
+	return ${R};
+}
+
+XMountFS_DESL(){
+	local M="${1}";
+	local G="${2}";
+	local DEV DEVf DIR TYPE OPT LABEL UUID;
+	ConfigGet DEVf "${G}:Device" ''
+	ConfigGet DIR "${G}:Dir" ''
+	ConfigGet TYPE "${G}:Type" '*'
+	ConfigGet OPT "${G}:Option" ''
+
+	ConfigGet LABEL "${G}:Label" '' && {
+		FindDeviceByLabel "${LABEL}"
+	}
+
+	ConfigGet UUID "${G}:UUID" '' && {
+		FindDeviceByUUID "${UUID}"
+	}
+
+	[ "${DEV}" = '' ] && {
+		DEV="${DEVf}"
+	}
+
+	[ "${TYPE}" = '*' ] && {
+		GuessType "${DEV}" || TYPE='';
+	}
+
+	[ "${DEV}" = '' ] && {
+		local x="${LABEL:+Label=${LABEL} }${UUID:+UUID=${UUID} }";
+		[ "${x}" = '' ] && {
+			error "${DIR}: No device defined. "
+		} || {
+			error "${DIR}: No device found: ${x}"
+		}
+		return 1;
+	}
+
+	case "${M}" in
+		'm' )
+			MountFS "${DEV}" "${DIR}" "${TYPE}" "${OPT}" || return ${?};
+		;;
+		'u' )
+			UnmountFS "${DEV}" "${DIR}" "${TYPE}" || return ${?};
+		;;
+		*)
+			error "XMountFS_DESL: internal error: unknown mode: ${M}"
+			return 1;
+		;;
+	esac
+	return 0;
+}
+
+XMountFS_fstab(){ # DEV, DIR, TYPE, OPT
+	local M="${1}";
+	local DEV="${2}";
+	local DIR="${3}";
+	local TYPE="${4}";
+	local OPT="${5}";
+	case "${DEV}" in
+		UUID=* )
+			FindDeviceByUUID "${DEV:5}" || {
+				error "${DIR}: UUID: '${DEV:5}' is not found."
+				return 1;
+			}
+		;;
+		LABEL=* )
+			FindDeviceByUUID "${DEV:6}" || {
+				error "${DIR}: Label: '${DEV:6}' is not found."
+				return 1;
+			}
+		;;
+	esac
+
+	case "${M}" in
+		'm' )
+			MountFS "${DEV}" "${DIR}" "${TYPE}" "${OPT}" || return ${?};
+		;;
+		'u' )
+			UnmountFS "${DEV}" "${DIR}" "${TYPE}" || return ${?};
+		;;
+		*)
+			error "XMountFS_fstab: internal error: unknown mode: ${M}"
+			return 1;
+		;;
+	esac
+	return 0;
+}
+
+FindDeviceByLabel(){ # Label
+	local L="${1}";
+	local x;
+
+	local IFS=$'\n\r';
+	for x in `blkid`; do
+		[ ! "${x//LABEL=\"${L}\"}" = "${x}" ] && {
+			DEV="${x%%: *}";
+			return 0;
+		}
+	done
+	return 1;
+}
+
+FindDeviceByUUID(){ # UUID
+	local L="${1}";
+	local x;
+
+	local IFS=$'\n\r';
+	for x in `blkid`; do
+		[ ! "${x//UUID=\"${L}\"}" = "${x}" ] && {
+			DEV="${x%%: *}";
+			return 0;
+		}
+	done
+	return 1;
+}
+
+GuessType(){ # Device
+	local D="${1}";
+	local x;
+
+	local IFS=$'\n\r';
+	for x in `blkid`; do
+	[ "${x%%: *}" = "${D}" ] && {
+		TYPE=${x##* TYPE=\"}
+		TYPE=${TYPE%%\"*}
+		return 0;
+	}
+	done
+	return 1;
+}
+
+MountFS(){ # DEV, DIR, TYPE, OPT
+	local DEV="${1}";
+	local DIR="${2}";
+	local TYPE="${3}";
+	local OPT="${4}";
+	[ "${DIR}" = '' ] && return 1;
+
+	info "Mounting '${DEV}' -> '${DIR}' [${TYPE}${OPT:+: ${OPT}}]"
+
+	CheckMounted "${DIR}" "${DEV}" "${TYPE}" && {
+			info " Already mounted."
+		return 0;
+	}
+
+	[ ! -e "${DIR}" ] && mkdir -p "${DIR}";
+
+	# If want to use 'ntfs3', must set 'Type=ntfs3' explicitly in conf.
+	case "${TYPE}" in
+		'ntfs' )
+			ntfs-3g ${DEV:--} ${DIR:--} ${OPT:+-o ${OPT}}
+		;;
+		*)
+			mount ${DEV:--} ${DIR:--} ${TYPE:+-t ${TYPE}} ${OPT:+-o ${OPT}}
+		;;
+	esac
+
+	return 0;
+}
+
+UnmountFS(){ # DEV, DIR, TYPE
+	local R=0;
+	local DEV="${1}";
+	local DIR="${2}";
+	local TYPE="${3}";
+	[ "${DIR}" = '' ] && return 1;
+
+	info "Unmounting '${DEV}' -> '${DIR}' [${TYPE}]"
+
+	CheckMounted "${DIR}" "${DEV}" "${TYPE}" || {
+		info " Already unmounted."
+		return 0;
+	}
+
+	umount -f "${DIR}" || {
+		warning " Failed to unmount. Detach device."
+		umount -f -l "${DIR}" || R=${?};
+	}
+
+	rmdir --ignore-fail-on-non-empty "${DIR}"
+
+	return ${R};
+}
+
+CheckMounted(){
+	local To="${1}";
+	local From="${2}";
+	local Type="${3}";
+
+	local IFS=$'\n\r';
+	for m in `cat /proc/mounts`; do
+		IFS=$' ';
+		set - ${m}
+		[ "${To}@${From}@${Type}" = "${2}@${From:+${1}}@${Type:+${3}}" ] && return 0;
+#		[ "${Type}" = '' ] && {
+#			[ "${To}@${From}" = "${2}@${From:+${1}}" ] && return 0;
+#		}
+	done
+
+	# No match
+	return 1;
+}
+
+error(){ echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2; }
+warning(){ echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2; }
+infoex(){ echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m"; }
+info(){ echo -e "I: ${*}"; }
+
+Main "${@}";
