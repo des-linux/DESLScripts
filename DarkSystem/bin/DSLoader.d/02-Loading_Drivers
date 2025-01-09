@@ -23,7 +23,7 @@ CheckExec(){
 }
 
 CheckDependencies(){
-	CheckExec 'devmm2name'
+	# CheckExec 'devmm2name'
 	return 0;
 }
 
