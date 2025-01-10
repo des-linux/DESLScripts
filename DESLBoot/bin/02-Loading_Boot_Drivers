@@ -10,6 +10,8 @@ PREVCNT=65536;
 #	rootwait=waittime(s)		Time in seconds to wait initialize storage devices.
 
 Main(){
+	[ "${DESL_KERNEL_VM:-0}" = '1' ] && return 0;
+
 	LoadCmdline;
 
 	LoadBootDrivers;
