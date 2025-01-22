@@ -1,0 +1,16 @@
+#!/bin/sh
+#//////////////////////////////////////////////////
+#//DESLinux DSLoader.d :: System Loader
+#//	(C)2014-2025 Dark Embedded Systems.
+#//	http://e.xprj.net/
+#//////////////////////////////////////////////////
+
+Main(){
+
+	/DRoot/DarkSystem/bin/KModulesLoader
+	/DRoot/DarkSystem/bin/MountFS
+	
+	return 0;
+}
+
+Main "${@}";
