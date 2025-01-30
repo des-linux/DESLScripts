@@ -76,6 +76,7 @@ ExportSystemVariables(){
 	export PRDHOST="${PRDCODE%%:*}";
 
 	export TERM='linux';
+	export PS1='[\u@\h] \w \$ ';
 	return 0;
 }
 
@@ -95,7 +96,6 @@ Entry(){
 			return 0;;
 		/GetEnvEx )
 			ExportSystemVal;
-			. "${sRoot}/Config.sh" >/dev/null 2>&1
 			return 0;;
 	esac
 	Main "${@}";
