@@ -95,6 +95,7 @@ DeviceInit(){
 DeviceSetHWAddr(){ # IF, MAC
 	local IF=${1};
 	local MAC=${2};
+	[ "${MAC4}" = '-' ] && return 0;
 	[ "${MAC4}" = '00:00:00:00' ] && return 0;
 
 	echo "I:  interface: ${IF} -> ${MAC}"
