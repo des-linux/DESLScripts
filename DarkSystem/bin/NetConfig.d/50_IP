@@ -24,12 +24,14 @@ IP_Main(){
 }
 
 IPMakeDHConf(){
-	cat <<"EOF" >> "${1}"
+	cat <<EOF > "${1}"
 timeout 10;
 retry 10;
 
 initial-interval 2;
 backoff-cutoff 5;
+
+send host-name "${HostName:-DESLinux}";
 EOF
 
 	return 0;
