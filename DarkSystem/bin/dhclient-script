@@ -1,0 +1,394 @@
+#!/bin/sh
+
+# Settings
+IGNORE_HOSTNAME=0
+IGNORE_DEFAULT_ROUTE=0
+
+RESOLV_CONF_DIR='/tmp';
+RESOLV_CONF='resolv.conf.dhclient'
+RESOLV_CONF_SUFFIX_4='4';
+RESOLV_CONF_SUFFIX_6='6';
+
+DEFAULT_IF_METRIC=
+
+
+
+##################################################
+# dhclient-script for DESLinux v1.0
+#	(C)2025 Dark Embedded Systems
+#	http://e.xprj.net/
+##################################################
+error(){ echo -e "\e[31;1mE:\e[m\e[1m ${*}\e[m" >&2; }
+warning(){ echo -e "\e[33;1mW:\e[m\e[1m ${*}\e[m" >&2 ; }
+infoex(){ echo -e "\e[m\e[1mI:\e[m\e[1m ${*}\e[m" ; }
+info(){ echo -e "I: ${*}"; }
+
+IP(){
+	infoex	ip "${@}"
+	ip "${@}"
+}
+
+ClearResolvConf4(){
+	rm -f "${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_4}.${interface}"
+	MergeResolvConf
+	return 0;
+}
+
+ClearResolvConf6(){
+	rm -f "${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_6}.${interface}"
+	MergeResolvConf
+	return 0;
+}
+
+MakeResolvConf(){
+	local x F;
+	local SearchList='';
+
+	[ ! "${new_domain_name_servers}" = '' ] && {
+		F="${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_4}.${interface}";
+		echo '' > "${F}.tmp"
+
+		[ ! "${new_domain_name}" = '' ] && {
+			echo "domain ${new_domain_name}" >> "${F}.tmp"
+			SearchList="${new_domain_name}";
+		}
+
+		[ ! "${new_domain_search}" = '' ] && {
+			for x in ${new_domain_search}; do
+				[ "${x}" = "${new_domain_name}" ] && continue;
+				[ "${x}" = "${new_domain_name}." ] && continue;
+				[ "${x}." = "${new_domain_name}" ] && continue;
+				SearchList="${SearchList:+${SearchList} }${x}";
+			done
+			echo "search ${SearchList}" >> "${F}.tmp"
+		}
+
+		[ ! "${new_domain_name_servers}" = '' ] && {
+			for x in ${new_domain_name_servers}; do
+				echo "nameserver ${x}" >> "${F}.tmp"
+			done
+		}
+
+		mv "${F}.tmp" "${F}"
+	}
+
+	[ ! "${new_dhcp6_name_servers}" = '' ] && {
+		F="${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_6}.${interface}";
+		echo '' > "${F}.tmp"
+
+		[ ! "${new_dhcp6_domain_search}" = '' ] && {
+			echo "search ${new_dhcp6_domain_search}" >> "${F}.tmp"
+		}
+
+		[ ! "${new_domain_name_servers}" = '' ] && {
+			for x in ${new_domain_name_servers}; do
+				[ ! "${x##fe80::}" = "${x}" ] && x="${x}%${interface}";
+				[ ! "${x##FE80::}" = "${x}" ] && x="${x}%${interface}";
+				echo "nameserver ${x}" >> "${F}.tmp"
+			done
+		}
+
+		mv "${F}.tmp" "${F}"
+	}
+
+	MergeResolvConf
+
+	return 0;
+}
+
+MergeResolvConf(){
+	local x F F4 F6;
+	F4="${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_4}";
+	echo '' > "${F4}_tmp"
+	for x in ${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_4}.*; do
+		cat "${x}" >> "${F4}_tmp"
+	done
+	mv "${F4}_tmp" "${F4}"
+
+	F6="${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_6}";
+	echo '' > "${F6}_tmp"
+	for x in ${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_6}.*; do
+		cat "${x}" >> "${F6}_tmp"
+	done
+	mv "${F6}_tmp" "${F6}"
+
+	F="${RESOLV_CONF_DIR}/${RESOLV_CONF}";
+		cat "${F4}" > "${F}_tmp"
+		cat "${F6}" >> "${F}_tmp"
+	mv "${F}_tmp" "${F}"
+
+	return 0;
+}
+
+SetHostNameIfEmpty(){
+	[ "${new_host_name}" = '' ] && return 0;
+
+	local CurrentHostName=`cat "/proc/sys/kernel/hostname"`;
+	[ "${new_host_name}" = "${CurrentHostName}" ] && return 0;
+
+	case "${CurrentHostName}" in
+		'' | 'localhost' | '(none)' )
+			echo "${new_host_name}" > "/proc/sys/kernel/hostname"
+		;;
+	esac
+	return 0;
+}
+
+SetIPv4(){
+	IP -4 address add ${new_ip_address}${new_subnet_mask:+/${new_subnet_mask}} dev ${interface} label ${interface} ${new_broadcast_address:+broadcast ${new_broadcast_address}}
+
+	[ ! "${new_interface_mtu}" = '' ] && IP link set dev ${interface} mtu ${new_interface_mtu}
+	return 0;
+}
+
+SetDefaultRoute4(){
+	local x;
+	local if_metric="${DEFAULT_IF_METRIC}";
+
+	[ ! "${IGNORE_DEFAULT_ROUTE:-0}" = '0' ] && return 0;
+
+	[ "${new_rfc3442_classless_static_routes}" = '' ] && {
+		# Multiple routers: force enable if_metric feature
+		[ ! "${new_routers%% *}" = "${new_routers}" ] && {
+			if_metric=${if_metric:-1};
+		}
+
+		for x in ${new_routers}; do
+
+			[ "${new_subnet_mask}" = '255.255.255.255' ] && {
+				IP -4 route add ${x} dev ${interface}
+			}
+
+			IP -4 route add default via ${x} dev ${interface} proto 151 ${if_metric:+metric $if_metric}
+
+			[ ! "${if_metric}" = '' ] && {
+				if_metric=$((if_metric+1));
+			}
+		done
+	} || {
+		local r='';
+		for x in ${new_rfc3442_classless_static_routes}; do
+			[ "${r}" = '' ] && {
+				r="${x}";
+			} || {
+				IP -4 route add ${r} via ${x} proto 151
+				r='';
+			}
+		done
+	}
+	return 0;
+}
+
+
+SetIPv4IfChanged(){
+	case "${reason}" in
+		BOUND | REBOOT )
+			old_ip_address='ALWAYS SET';
+		;;
+	esac
+
+	[ ! "${old_ip_address}" = "${new_ip_address}" ] && {
+		IP -4 address flush dev ${interface} label ${interface}
+		SetIPv4
+		return 0;
+	} || {
+		warning "IPv4 address is not changed."
+	}
+
+	return 1;
+}
+
+SetDefaultRoute4IfChanged(){
+	case "${reason}" in
+		BOUND | REBOOT )
+			old_routers='ALWAYS SET';
+		;;
+	esac
+
+	[ ! "${old_routers}" = "${new_routers}" ] && {
+		IP -4 route flush dev ${interface} proto 151
+		SetDefaultRoute4
+		return 0;
+	} || {
+		warning "IPv4 default route is not changed."
+	}
+
+	return 1;
+}
+
+GetCurrentAddress4(){ # if
+	local if="${1}";
+	local IFS='
+';
+	IP4ADDR='';
+
+	for l in `ip address show dev ${if}`; do
+		case "${l}" in
+			*inet\ *)
+				[ "${IP4ADDR}" = '' ] && {
+					IP4ADDR="${l#*inet }";
+					IP4ADDR="${IP4ADDR%% *}";
+					IP4ADDR="${IP4ADDR%%/*}";
+				}
+			;;
+		esac
+	done
+	return 0;
+}
+
+GetCurrentDefaultRoute4(){ # if
+	local if="${1}";
+	local IFS='
+';
+	IP4DRT='';
+
+	for l in `ip route show dev ${if} proto 151`; do
+		case "${l%% *}" in
+			default | '0.0.0.0/0' )
+				l="${l#*via }";
+				l="${l%% *}";
+				IP4DRT="${IP4DRT}${l:+${l} }";
+			;;
+		esac
+	done
+	IP4DRT="${IP4DRT% }";
+	return 0;
+}
+
+Main_dhclient(){
+
+	case "${reason}" in
+		PREINIT )
+			ClearResolvConf4
+
+			IP link set dev "${interface}" up
+
+			[ ! "${alias_ip_address}" = '' ] && {
+				IP -4 address flush dev ${interface} label ${interface}:0
+			}
+		;;
+
+		BOUND | RENEW | REBIND | REBOOT )
+
+			SetIPv4IfChanged
+			SetDefaultRoute4IfChanged
+
+			[ ! "${alias_ip_address}" = '' ] && [ ! "${new_ip_address}" = "${alias_ip_address}" ] && {
+				IP -4 address flush dev ${interface} label ${interface}:0
+				IP -4 address add ${alias_ip_address}${alias_subnet_mask:+/$alias_subnet_mask} dev ${interface} label ${interface}:0
+				IP -4 route add ${alias_ip_address} dev ${interface}
+			}
+
+			MakeResolvConf
+		;;
+
+		EXPIRE | FAIL | RELEASE | STOP )
+			ClearResolvConf4
+
+			[ ! "${alias_ip_address}" = '' ] && {
+				IP -4 address flush dev ${interface} label ${interface}:0
+				IP -4 address add ${alias_ip_address}${alias_subnet_mask:+/$alias_subnet_mask} dev ${interface} label ${interface}:0
+				IP -4 route add ${alias_ip_address} dev ${interface}
+			}
+
+			[ ! "${old_ip_address}" = '' ] && {
+				IP -4 address flush dev "${interface}" label "${interface}"
+			}
+		;;
+
+		TIMEOUT )
+			[ ! "${alias_ip_address}" = '' ] && {
+				IP -4 address flush dev ${interface} label ${interface}:0
+			}
+
+			SetIPV4
+			MakeResolvConf
+		;;
+
+		V6ONLY )
+			IP -4 address flush dev "${interface}" label "${interface}"
+		;;
+
+		PREINIT6 )
+			ClearResolvConf6
+
+			IP link set dev "${interface}" up
+			IP -6 address flush dev ${interface} scope global permanent
+		;;
+
+		BOUND6 | RENEW6 | REBIND6 )
+			[ ! "${new_ip6_address}" = '' ] && [ ! "${new_ip6_prefixlen}" = '' ] && {
+				IP -6 address replace ${new_ip6_address}/${new_ip6_prefixlen} dev ${interface} scope global valid_lft ${new_max_life} preferred_lft ${new_preferred_life}
+			}
+			MakeResolvConf
+		;;
+
+		DEPREF6 )
+			IP -6 address change ${cur_ip6_address}/${cur_ip6_prefixlen} dev ${interface} scope global preferred_lft 0
+		;;
+
+		EXPIRE6 | RELEASE6 | STOP6)
+			IP -6 address del ${old_ip6_address}/${old_ip6_prefixlen} dev ${interface}
+		;;
+
+		MEDIUM | ARPCHECK | ARPSEND ) ;;
+
+		*) error "Unsupported mode: ${reason}";;
+	esac
+
+	return 0;
+}
+
+Main_udhcpc(){
+	local x;
+	local reason="${1}";
+
+	case "${reason}" in
+		deconfig )
+			ClearResolvConf4
+
+			IP link set dev "${interface}" up
+			IP -4 address flush dev ${interface}
+			IP -4 route flush dev ${interface} proto 151
+		;;
+
+		bound | renew )
+			GetCurrentAddress4 "${interface}"
+
+			old_ip_address="${IP4ADDR}";
+			new_ip_address="${ip}" \
+			new_subnet_mask="${subnet}" \
+				SetIPv4IfChanged
+
+			GetCurrentDefaultRoute4 "${interface}"
+
+			old_routers="${IP4DRT}" \
+			new_routers="${router}" \
+				SetDefaultRoute4IfChanged
+
+
+			new_domain_name_servers="${dns}" \
+				MakeResolvConf
+
+		;;
+		nak ) ;;
+
+		*) error "Unsupported mode: ${reason}";;
+	esac
+
+	return 0;
+}
+
+Main(){
+	case "${1}" in
+		bound | deconfig | nak | renew )
+			Main_udhcpc "${@}" || return ${?};
+		;;
+		*)
+			Main_dhclient "${@}" || return ${?};
+		;;
+	esac
+	return 0;
+}
+
+Main "${@}"

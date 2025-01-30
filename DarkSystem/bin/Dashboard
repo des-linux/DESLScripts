@@ -214,7 +214,12 @@ ShowNetwork_Interface(){
 		[1-7]) TAB='		';;
 		8|9|10|11|12|13|14|15) TAB='	';;
 	esac
-	echo "	${IFNAME}${TAB}: ${MACADDR}	${IP4ADDR}"
+
+	local TAB2='';
+	case "${#MACADDR}" in
+		[1-7]) TAB2='		';;
+	esac
+	echo "	${IFNAME}${TAB}: ${MACADDR}${TAB2}	${IP4ADDR}"
 }
 
 TestNet(){

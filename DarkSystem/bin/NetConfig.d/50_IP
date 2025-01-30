@@ -6,6 +6,9 @@
 #//////////////////////////////////////////////////
 
 IP_Main(){
+	local HostName="${SC_HostName:--}";
+	[ "${HostName}" = '-' ] && HostName='DESLinux';
+
 	local DHC_CONF="${DROOT:-/DRoot}/DHCP/etc/dhclient.conf";
 
 	[ ! -f "${DHC_CONF}" ] && {
@@ -21,12 +24,14 @@ IP_Main(){
 }
 
 IPMakeDHConf(){
-	cat <<"EOF" >> "${1}"
+	cat <<EOF > "${1}"
 timeout 10;
 retry 10;
 
 initial-interval 2;
 backoff-cutoff 5;
+
+send host-name "${HostName:-DESLinux}";
 EOF
 
 	return 0;
@@ -34,6 +39,11 @@ EOF
 
 IP4Config(){
 	local K V;
+	local DHCLIENT=0;
+
+	[ -e "${DROOT}/DHCP/sbin/dhclient" ] && {
+		DHCLIENT=1;
+	}
 
 	info 'Set IPv4...'
 
@@ -60,7 +70,11 @@ IP4Config(){
 		 		ip link set "${K}" up
 
 				CallServerLoader stop  "DHCPC-${K}"
-				CallServerLoader start "DHCPC-${K}" ${DROOT}/DHCP/sbin dhclient -4 -d ${DHC_ARGS} -sf "${DROOT}/DHCP/sbin/dhclient-script" -lf "/var/dhclient.db" "${K}"
+				[ "${DHCLIENT}" = '1' ] && {
+					CallServerLoader start "DHCPC-${K}" ${DROOT}/DHCP/sbin dhclient -4 -d ${DHC_ARGS} -sf "${DROOT}/DarkSystem/bin/dhclient-script" -lf "/var/dhclient4_${K}.db" "${K}"
+				} || {
+					CallServerLoader start "DHCPC-${K}" /sbin udhcpc -f -t 3 -T 5 -A 10 -s "${DROOT}/DarkSystem/bin/dhclient-script" -i "${K}" -x "hostname:${HostName}"
+				}
 			;;
 
 			*=* ) # Static IP
@@ -111,7 +125,7 @@ IP6Config(){
 		 		ip link set "${K}" up
 
 				CallServerLoader stop  "DHCPC6-${K}"
-				CallServerLoader start "DHCPC6-${K}" ${DROOT}/DHCP/bin dhclient -6 -d ${DHC_ARGS} -sf "${DROOT}/DHCP/bin/dhclient-script" -lf "/var/dhclient.db" "${K}"
+				CallServerLoader start "DHCPC6-${K}" ${DROOT}/DHCP/bin dhclient -6 -d ${DHC_ARGS} -sf "${DROOT}/DarkSystem/bin/dhclient-script" -lf "/var/dhclient6_${K}.db" "${K}"
 			;;
 
 			*=* ) # Static IP
