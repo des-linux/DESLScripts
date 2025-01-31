@@ -28,6 +28,13 @@ IP(){
 	ip "${@}"
 }
 
+TestIPR2(){
+	local R=`ip 2>&1`;
+	[ "${R%% *}" = 'BusyBox' ] && return 1;
+
+	return 0;
+}
+
 ClearResolvConf4(){
 	rm -f "${RESOLV_CONF_DIR}/${RESOLV_CONF}${RESOLV_CONF_SUFFIX_4}.${interface}"
 	MergeResolvConf
@@ -206,7 +213,13 @@ SetDefaultRoute4IfChanged(){
 	esac
 
 	[ ! "${old_routers}" = "${new_routers}" ] && {
-		IP -4 route flush dev ${interface} proto 151
+
+		[ "${IPR2LITE}" = '1' ] && {
+			RemoveDefaultRouteLite
+		} || {
+			IP -4 route flush dev ${interface} proto 151
+		}
+
 		SetDefaultRoute4
 		return 0;
 	} || {
@@ -214,6 +227,30 @@ SetDefaultRoute4IfChanged(){
 	}
 
 	return 1;
+}
+
+CountDefaultRouteLite(){
+	local x;
+	local R=0;
+	local IFS='
+';
+	for x in `ip route show default dev ${interface}`; do
+		R=$((R+1));
+	done
+	return ${R};
+}
+
+RemoveDefaultRouteLite(){
+	local R=0;
+	CountDefaultRouteLite;
+	R=${?};
+
+	while [ ! "${R}" = '0' ]; do
+		IP route del default dev ${interface} || return 0;
+		R=$((R-1));
+	done
+
+	return 0;
 }
 
 GetCurrentAddress4(){ # if
@@ -380,6 +417,9 @@ Main_udhcpc(){
 }
 
 Main(){
+	local IPR2LITE=0;
+	TestIPR2 || IPR2LITE=1;
+
 	case "${1}" in
 		bound | deconfig | nak | renew )
 			Main_udhcpc "${@}" || return ${?};
